@@ -1,0 +1,168 @@
+@import "tailwindcss";
+
+/*
+ * TAPnalytics design tokens.
+ * Dark mode ("graphite") is the primary experience; light mode is opt-in
+ * via [data-theme="light"] on <html>. Keep this palette restrained:
+ * graphite black + silver structure + white text, racing red for action,
+ * tech green for active/NFC/positive states. No stray gradients or glow.
+ */
+:root {
+  --color-graphite-950: #0a0b0d;
+  --color-graphite-900: #111215;
+  --color-graphite-800: #17181c;
+  --color-graphite-700: #202126;
+  --color-graphite-600: #2b2c32;
+  --color-graphite-500: #3c3e46;
+
+  --color-silver-300: #c7cad1;
+  --color-silver-400: #9ea3ad;
+  --color-silver-500: #767b86;
+
+  --color-white: #f5f6f8;
+
+  --color-racing-red-400: #ff3b30;
+  --color-racing-red-500: #e2261c;
+  --color-racing-red-600: #b81d15;
+  --color-racing-red-700: #a01710;
+
+  --color-tech-green-400: #3fe0a5;
+  --color-tech-green-500: #17c98a;
+  --color-tech-green-600: #0fa876;
+
+  --color-amber-400: #f0b429;
+
+  /* semantic tokens — dark (default) */
+  --background: var(--color-graphite-950);
+  --surface: var(--color-graphite-900);
+  --surface-2: var(--color-graphite-800);
+  --border-color: var(--color-graphite-600);
+  --foreground: var(--color-white);
+  --muted-foreground: var(--color-silver-400);
+  /* --accent is used as TEXT (error messages, links, the "nalytics" logo
+     mark) far more than as a background — racing-red-500 only reaches
+     ~4.25:1 against this background, short of WCAG AA's 4.5:1 for
+     normal-size text. -400 (brighter) clears it at ~5.5:1. The light theme
+     below uses -600 (darker) instead, since a light background needs the
+     opposite direction — no single shade passes both. */
+  --accent: var(--color-racing-red-400);
+  --accent-foreground: var(--color-white);
+  /* Separate from --accent: used wherever accent is a SOLID background with
+     accent-foreground text on top (buttons, solid badges) — needs a shade
+     that reads well with white text specifically, regardless of theme. */
+  --accent-solid: var(--color-racing-red-600);
+  --positive: var(--color-tech-green-500);
+  --positive-foreground: var(--color-graphite-950);
+  --warning: var(--color-amber-400);
+  --ring: var(--color-racing-red-400);
+  --radius: 0.5rem;
+}
+
+:root[data-theme="light"] {
+  --background: #f7f7f8;
+  --surface: #ffffff;
+  --surface-2: #f0f1f3;
+  --border-color: #d9dbe0;
+  --foreground: #16171b;
+  --muted-foreground: #55585f;
+  /* Darker than dark mode's --accent, on purpose — see the dark-mode
+     comment above. -600 reaches ~6:1 against this light background. */
+  --accent: var(--color-racing-red-600);
+  --accent-foreground: #ffffff;
+  --accent-solid: var(--color-racing-red-600);
+  --positive: var(--color-tech-green-600);
+  /* White on tech-green-600 is only ~3:1 in light mode — dark text clears
+     AA (~6.5:1). Dark mode keeps --positive at the brighter -500 shade,
+     which does pass with dark text already. */
+  --positive-foreground: var(--color-graphite-950);
+  --warning: #a8720c;
+  --ring: var(--color-racing-red-600);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border-color);
+  --color-foreground: var(--foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-solid: var(--accent-solid);
+  --color-positive: var(--positive);
+  --color-positive-foreground: var(--positive-foreground);
+  --color-warning: var(--warning);
+  --color-ring: var(--ring);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 0.25rem);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+* {
+  border-color: var(--color-border);
+}
+
+html {
+  color-scheme: dark;
+}
+html[data-theme="light"] {
+  color-scheme: light;
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-feature-settings: "cv11", "ss01";
+}
+
+::selection {
+  background: var(--color-accent);
+  color: var(--color-accent-foreground);
+}
+
+/* Report pages (src/app/app/reportes) print just the report content —
+   the app shell's sidebar/header hide via these rules instead of a
+   print-only route, so "Imprimir / Guardar como PDF" just works. */
+@media print {
+  aside,
+  header {
+    display: none !important;
+  }
+  #main-content {
+    padding: 0 !important;
+  }
+  body {
+    background: #fff;
+    color: #111;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  background: var(--color-accent);
+  color: var(--color-accent-foreground);
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md);
+}
+.skip-link:focus {
+  left: 1rem;
+  top: 1rem;
+}
