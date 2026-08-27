@@ -78,7 +78,7 @@ diseño.
 
 **Implementación (`/t/[code]` → `/r/[code]`):**
 
-1. `GET /t/[code]` (`src/app/t/[code]/route.ts`) resuelve la tarjeta por
+1. `GET /t/[code]` (`app/t/[code]/route.ts`) resuelve la tarjeta por
    `public_code`. Si no existe, está desactivada/perdida, o el
    User-Agent parece un bot, redirige sin registrar nada útil.
 2. Si la tarjeta es válida, calcula device/OS/navegador con un parser propio
@@ -93,7 +93,7 @@ diseño.
 4. Guarda el `session_token` en una cookie `httpOnly` con alcance
    `path=/r/[code]` (no en la URL — evita fugas por `Referer`/logs) y
    redirige a `/r/[code]`.
-5. `/r/[code]` (`src/app/r/[code]/page.tsx`) exige esa cookie; si falta,
+5. `/r/[code]` (`app/r/[code]/page.tsx`) exige esa cookie; si falta,
    vuelve a `/t/[code]` (se autorrepara generando un tap nuevo). Renderiza
    la landing (logo, bienvenida, pregunta principal) y el flujo de 3
    respuestas — Mala/Buena/Excelente — seguido de un formulario dinámico
@@ -120,7 +120,7 @@ Roles (`org_role`): `superadmin`, `owner`, `admin`, `manager`, `analyst`,
 
 - **Base de datos**: cada política RLS declara explícitamente qué roles
   pueden `select`/`insert`/`update`/`delete` por tabla.
-- **UI** (`src/lib/permissions.ts`): una matriz rol → acción
+- **UI** (`lib/permissions.ts`): una matriz rol → acción
   (`view`, `create`, `edit`, `delete`, `export`, `manage_users`,
   `manage_cards`, `manage_billing`, `view_sensitive`) que decide qué
   controles mostrar. **Nunca es la barrera de seguridad real** — esa siempre
@@ -152,20 +152,26 @@ fases futuras):
 ✅ `case_notes`, ✅ `case_history`
 
 **Alertas y notificaciones** — ✅ `alert_rules` (tipos activables por org),
-✅ `alerts`, ✅ `notifications` (in-app, con campana en el shell). Pendiente:
-`notification_preferences` (elegir canal/horario por usuario — Fase 4, junto
-con el envío real por correo/WhatsApp/push)
+✅ `alerts`, ✅ `notifications` (in-app, con campana en el shell), ✅
+`notification_preferences` (canal/frecuencia por usuario y categoría,
+`/app/configuracion`), ✅ `push_subscriptions` (Web Push, migración 0006).
+Envío real por correo/push/WhatsApp desde Fase 4 (`lib/notify.ts`).
 
-**Reportes** — usados en la vista web/CSV: `feedback_sessions`,
-`feedback_responses`, `cases`. Las tablas `reports`/`report_schedules`
-(historial de reportes generados y envío programado) quedan para la Fase 4
+**Reportes** — la vista web/CSV/Excel usa `feedback_sessions`,
+`feedback_responses`, `cases`. ✅ `report_schedules` (reportes programados,
+`/app/reportes`) y ✅ `reports` (historial de envíos) se escriben desde
+Fase 4; el disparo real lo hace un cron externo llamando a
+`POST /api/cron/reports` — no hay cola ni worker propio en este proyecto.
 
-**Inteligencia** — `ai_insights`, `recommendations`, `corrective_actions`
+**Inteligencia** — ✅ `ai_insights`, `recommendations`, `corrective_actions`
+poblados por `lib/intelligence.ts` (Fase 4, `/app/inteligencia`).
 
-**Suscripciones** — ✅ `plans` (seed + lectura pública),
-`subscriptions`, `invoices`
+**Suscripciones** — ✅ `plans` (seed + lectura pública, con
+`stripe_price_id_monthly`/`_yearly` desde 0006), ✅ `subscriptions`,
+`invoices` (sincronizadas por `app/api/stripe/webhook`, Fase 4).
 
-**Plataforma** — `integrations`, `audit_logs`
+**Plataforma** — ✅ `integrations` (RLS lista, sin UI todavía — Fase 5),
+✅ `audit_logs` (RLS lista, sin escritores todavía — Fase 5).
 
 Todas las tablas mutables tienen `created_at`/`updated_at` (trigger
 `set_updated_at`), y las que representan entidades de negocio con ciclo de
@@ -184,12 +190,12 @@ tarjetas de otros clientes probando URLs consecutivas. La URL pública será
 - Registro/login con correo y contraseña (Supabase Auth), Google OAuth
   preparado (`signInWithOAuth`), recuperación de contraseña, verificación de
   correo vía `/auth/confirm`.
-- `src/proxy.ts` (Proxy — el nombre de Middleware en Next.js 16) refresca la
+- `proxy.ts` (Proxy — el nombre de Middleware en Next.js 16) refresca la
   sesión en cada navegación y protege `/onboarding`, `/app` y `/admin`.
 - 2FA: columna `profiles.two_factor_enabled` preparada; la UI se
   implementará usando la API de MFA de Supabase Auth en una fase posterior.
 - Política de contraseña: mínimo 10 caracteres, mayúscula, minúscula y
-  número (`src/lib/validations/auth.ts`).
+  número (`lib/validations/auth.ts`).
 
 ## 7. Onboarding
 
@@ -203,7 +209,7 @@ registra un tap de verdad y abre la encuesta real.
 ## 8. Casos, alertas y dashboard (Fase 3)
 
 **De feedback a caso, en el mismo request.** Cuando `submitFeedback`
-(`src/app/r/[code]/actions.ts`) guarda una encuesta calificada "Mala":
+(`app/r/[code]/actions.ts`) guarda una encuesta calificada "Mala":
 
 1. `lib/cases.ts` crea una fila en `cases` (folio automático, `due_at`
    calculado por SLA según la urgencia: 4h crítica / 24h alta / 72h media /
@@ -270,18 +276,75 @@ honesto si Supabase no está configurado — nunca precios inventados.
 - Ningún dato de demostración se presenta como real sin decirlo
   explícitamente (ver el paso final del onboarding).
 
-## 11. Próximos pasos por fase
+## 11. TAP Intelligence, suscripciones, superadmin e integraciones (Fase 4)
 
-- **Fase 4** (siguiente): TAP Intelligence (sentimiento, detección de
-  anomalías, recomendaciones con evidencia — la base de datos de
-  `ai_insights`/`recommendations`/`corrective_actions` ya existe),
-  suscripciones con Stripe + webhooks, panel de superadministrador,
-  integraciones reales (WhatsApp, Web Push, envío de alertas por correo),
-  reportes programables (`report_schedules`).
-- **Fase 5**: pruebas end-to-end, auditoría de seguridad, optimización de
-  Core Web Vitals en la landing NFC, documentación final, despliegue.
+**TAP Intelligence** (`lib/intelligence.ts`, `/app/inteligencia`): un motor
+basado en reglas — comparación del periodo actual contra el periodo
+anterior de igual duración — no un modelo de lenguaje externo, pese al
+nombre. Detecta tres cosas: picos/recurrencias en categorías negativas
+(`anomaly`/`recurring_issue`), caídas o subidas relevantes del índice de
+satisfacción (`trend`), y sucursales muy por debajo del promedio de la
+organización (`comparison`). Cada hallazgo se guarda en `ai_insights` con
+su evidencia (`evidence` jsonb, periodo, tamaño de muestra) y, cuando
+amerita acción, una `recommendations` vinculada. `confidence` es un
+heurístico basado en el tamaño de muestra (igual que el índice de
+satisfacción de la Fase 3), nunca una probabilidad estadística real — se
+muestra siempre junto a la evidencia que la originó. Se dispara con el
+botón "Analizar ahora" (un miembro `owner`/`admin`, vía Server Action con
+el cliente de service role — `ai_insights`/`recommendations` no tienen
+política de `INSERT` para usuarios normales, solo `SELECT`), no por cron:
+mismo límite de "no hay cola ni worker" que el resto del proyecto.
 
-## 12. Límites conocidos de la Fase 2 (honestidad, no deuda oculta)
+**Suscripciones con Stripe** (`lib/stripe.ts`,
+`app/api/stripe/webhook/route.ts`, `/app/facturacion`): checkout en modo
+suscripción, portal de cliente, y un webhook que es el **único** escritor
+de `subscriptions`/`invoices` (esas tablas son de solo lectura para
+`owner`/`admin` vía RLS — se sincronizan con el service role, igual que
+`ai_insights`). Los precios siguen sin estar hardcodeados: `plans` ahora
+también guarda `stripe_price_id_monthly`/`_yearly` (migración 0006) para
+saber contra qué Price de Stripe hacer el checkout, pero el monto que se
+le cobra al cliente lo define Stripe/el Price, no el código.
+
+**Panel de superadministrador** (`/admin`, protegido por
+`profiles.is_superadmin`, verificado en `app/admin/layout.tsx` — el Proxy
+solo exige sesión, no el flag): lista de organizaciones con cambio de plan
+y estado, y CRUD de planes (crear, activar/desactivar, precios y Price IDs
+de Stripe). Usa el cliente de service role porque
+`organizations_select_member` no tiene bypass para superadmin — deliberado,
+para no tocar RLS ya probada; la autorización real la hace el propio
+layout antes de renderizar cualquier página hija.
+
+**Integraciones reales de alertas** (`lib/notify.ts`, usado desde
+`lib/alerts.ts`): cada canal de `alert_rules.channels` ahora dispara un
+envío real — correo (Resend), Web Push (VAPID, `web-push`, suscripción
+gestionada en `/app/configuracion` + `app/api/push/subscribe`) y WhatsApp
+(Cloud API, mensaje de texto plano). Cada intento de envío por canal queda
+como una fila en `notifications` con `delivered_at`/`delivery_error`, así
+que la entrega es auditable por canal y por usuario. `notification_preferences`
+(canal + categoría + `enabled`) se respeta antes de enviar; solo la
+frecuencia `immediate` se envía de forma síncrona — `hourly_digest`/
+`daily_digest`/`weekly_digest` quedan guardadas en la preferencia pero no
+se agrupan ni se envían todavía (necesitarían un cron, ver límites abajo).
+
+**Reportes programados** (`report_schedules`, `/app/reportes`,
+`app/api/cron/reports/route.ts`): un miembro con permiso de `export` crea
+un schedule (frecuencia, formato, destinatarios); el envío real lo dispara
+un cron **externo** (Vercel Cron, GitHub Actions, etc.) llamando a
+`POST /api/cron/reports` con `Authorization: Bearer $CRON_SECRET` — este
+proyecto no tiene worker propio. El correo enviado es un resumen ejecutivo
+en HTML con enlace de vuelta a `/app/reportes`, no un PDF/Excel adjunto
+todavía. La exportación manual sí gana Excel (`/app/reportes/export?format=xlsx`,
+con `exceljs`), además del CSV que ya existía.
+
+## 12. Próximos pasos
+
+Las 5 fases del plan original están completas (§16-§20 cubren la Fase 5:
+seguridad, accesibilidad, pruebas, Core Web Vitals y datos demo). Lo que
+queda no es una fase nueva sino verificación contra infraestructura real
+que este entorno de desarrollo no tuvo conectada — ver README →
+"Despliegue → Antes de producción" para la lista concreta.
+
+## 13. Límites conocidos de la Fase 2 (honestidad, no deuda oculta)
 
 - El rate limiting de `/t/[code]` es una consulta a `tap_events` por
   IP-hash/minuto — funciona, pero no reemplaza un limitador dedicado
@@ -296,17 +359,14 @@ honesto si Supabase no está configurado — nunca precios inventados.
   urgencia alta queda para la Fase 3, junto con el centro de casos que lo
   hace útil — el dato (`urgency_level`, `rating`) ya se captura hoy.
 
-## 13. Límites conocidos de la Fase 3
+## 14. Límites conocidos de la Fase 3
 
-- Las alertas y notificaciones son solo **in-app** por ahora — el canal
-  `email`/`push`/`whatsapp` existe en el modelo (`alert_rules.channels`,
-  `notification_channel`) pero no se dispara ningún envío real todavía; se
-  conecta en la Fase 4 junto con las demás integraciones.
 - Los tipos de alerta activables hoy son `new_bad_experience` y
-  `urgent_comment` (los únicos con lógica de disparo real). El resto del
-  enum `alert_type` (racha de quejas, problema recurrente, tarjeta sin
-  actividad, etc.) necesita analizar tendencias en el tiempo — eso es
-  trabajo de TAP Intelligence, Fase 4.
+  `urgent_comment` (los únicos con lógica de disparo real al llegar
+  feedback). El resto del enum `alert_type` (racha de quejas, tarjeta sin
+  actividad, etc.) necesita analizar tendencias en el tiempo — eso es lo
+  que hace TAP Intelligence en la Fase 4, pero como hallazgos en
+  `ai_insights`/`recommendations`, no como nuevos disparadores de `alerts`.
 - El índice de satisfacción es una fórmula simple y documentada
   (`(excelente×1 + buena×0.5) / calificadas × 100`), no un modelo estadístico
   — es intencional y transparente, no un intento de simular sofisticación
@@ -315,7 +375,261 @@ honesto si Supabase no está configurado — nunca precios inventados.
   (CSS `@media print`), no genera un PDF en el servidor — funciona en todos
   los navegadores modernos sin dependencias nuevas, pero el resultado
   depende de la configuración de impresión del usuario.
-- El export de Reportes es CSV; Excel (`.xlsx`) queda para la Fase 4.
 - El enmascarado a nivel de columna de los datos de contacto de un caso
   (mencionado en la §4) sigue pendiente — hoy `view_sensitive` es
   todo-o-nada por fila, no por campo.
+
+## 15. Límites conocidos de la Fase 4
+
+- **No hay cola ni cron propios**, otra vez: "Analizar ahora" (TAP
+  Intelligence) y los reportes programados dependen de que alguien haga
+  clic o de que un scheduler externo llame a `/api/cron/reports`. Nada se
+  ejecuta solo dentro de este proyecto.
+- **TAP Intelligence es reglas, no IA real** — comparación de periodos y
+  umbrales fijos (`MIN_SAMPLE = 3`, `SPIKE_RATIO = 1.5`, delta ±10 puntos
+  de satisfacción, ±15 puntos entre sucursales). `AI_PROVIDER`/`AI_API_KEY`
+  siguen preparados en `.env.example` para una versión futura que sí llame
+  a un modelo de lenguaje sobre los comentarios de texto libre.
+- **WhatsApp usa mensaje de texto plano** vía la Cloud API — eso solo
+  funciona dentro de la ventana de 24h de conversación con el cliente. Un
+  envío de alerta no solicitado en producción necesita una plantilla de
+  mensaje aprobada por Meta; `lib/notify.ts` está señalado con ese límite.
+- **Los reportes programados no adjuntan PDF/Excel** — el correo es un
+  resumen ejecutivo en HTML con un enlace de vuelta a `/app/reportes`.
+  Adjuntar el archivo real es un cambio pequeño una vez que el envío se
+  verifique en producción (Resend soporta adjuntos).
+- **Las frecuencias `hourly_digest`/`daily_digest`/`weekly_digest` de
+  `notification_preferences` se guardan pero no se agrupan ni se envían**
+  — solo `immediate` dispara un envío síncrono hoy; los digests necesitan
+  el mismo cron que los reportes programados.
+- **El panel de superadmin usa el cliente de service role para leer/escribir
+  `organizations`**, no RLS — `organizations_select_member` no tiene bypass
+  para superadmin (a diferencia de la mayoría de las demás tablas). La
+  autorización real la hace `app/admin/layout.tsx` verificando
+  `profiles.is_superadmin` antes de renderizar cualquier página hija — una
+  capa de aplicación, no de base de datos, deliberada para no tocar la RLS
+  de `organizations` ya probada contra Postgres real.
+- **`app/`, `components/` y `lib/` se movieron de `src/` a la raíz del
+  repo** en esta fase, únicamente por el límite de ~100 archivos por carpeta
+  de la subida manual a GitHub (ver README → "Sobre el límite de archivos
+  por carpeta"). No cambia nada en tiempo de ejecución; solo el alias
+  `@/*` en `tsconfig.json` pasa de `./src/*` a `./*`.
+
+## 16. Auditoría de seguridad (Fase 5)
+
+Revisión manual dirigida (sin acceso a un proyecto de Supabase real en este
+entorno para correr un scanner dinámico — ver limitación de red documentada
+en el README). Hallazgos y su corrección:
+
+- **Inyección de HTML en correos transaccionales (corregido).**
+  `app/(marketing)/demo/actions.ts` (formulario público `/demo`) y
+  `lib/notify.ts` (alertas por correo, que pueden incluir el comentario
+  libre de una encuesta anónima) interpolaban texto de usuario directo en
+  un template de HTML sin escapar. Un comentario o campo de formulario con
+  `<img src=x onerror=...>` habría llegado sin escapar al cliente de correo
+  del destinatario. Se agregó `escapeHtml()` en `lib/email.ts` y se aplicó
+  en ambos puntos; `app/api/cron/reports/route.ts` genera su propio HTML
+  de resumen (con el nombre de la organización ya escapado) y llama a
+  `sendTransactionalEmail` directo, no a la variante que escapa `body` como
+  texto plano.
+- **SSRF vía suscripción de Web Push (corregido).** `POST
+  /api/push/subscribe` guardaba el `endpoint` que mandara el cliente sin
+  validar; ese endpoint luego recibe una petición HTTP real del servidor
+  (`webpush.sendNotification`). Un usuario autenticado podía apuntar el
+  endpoint a una URL interna. Se agregó `isAllowedPushEndpoint()` en
+  `lib/notify.ts`: exige `https://` y una lista blanca de hosts de los
+  servicios de push reales (FCM, Mozilla, Apple, WNS).
+- **Comparación no constante del secreto del cron (corregido).**
+  `app/api/cron/reports/route.ts` comparaba el header `Authorization` con
+  `!==`; se cambió a `crypto.timingSafeEqual` para no filtrar el secreto
+  por temporización, aunque el riesgo práctico era bajo.
+- **Cabeceras de seguridad básicas (agregado).** `next.config.ts` ahora
+  fija `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
+  `Referrer-Policy: strict-origin-when-cross-origin` y una
+  `Permissions-Policy` restrictiva en todas las rutas. **No se agregó
+  Content-Security-Policy** — una CSP mal calibrada puede romper Stripe
+  Checkout/el portal de cliente y OAuth de Google sin poder probarlo contra
+  un despliegue real en este entorno; queda como siguiente paso antes de
+  producción.
+- **CSRF en `POST/DELETE /api/push/subscribe` (mitigado, no descartado).**
+  Es un Route Handler normal, no una Server Action (que Next.js protege
+  automáticamente verificando el origen) — un sitio malicioso podría
+  intentar un `fetch` con credenciales hacia esta ruta. La mitigación
+  real hoy es que las cookies de sesión de `@supabase/ssr` son
+  `SameSite=Lax` por defecto, lo que bloquea el envío de cookies en un
+  `POST` entre sitios. No se agregó un token CSRF explícito porque
+  duplicaría esa protección; revisarlo si el proyecto cambia el
+  `sameSite` de las cookies de sesión.
+- **Revisado y sin hallazgos**: cobertura de RLS en las ~30 tablas
+  (reverificada contra Postgres real en cada fase), IDOR en las Server
+  Actions nuevas de la Fase 4 (todas derivan `organization_id` de la
+  sesión, nunca de un parámetro del cliente, excepto el panel de
+  superadmin que ya tiene su propia verificación explícita — ver §11 y
+  §15), secretos hardcodeados (ninguno; `grep` de patrones de claves de
+  Stripe/AWS/llaves privadas sobre `app/`, `components/`, `lib/`,
+  `supabase/` no encontró nada), y `.env*` en `.gitignore`.
+
+## 17. Accesibilidad WCAG 2.1 AA (Fase 5)
+
+Revisión manual (sin un proyecto de Supabase real en este entorno para
+correr un lector de pantalla contra la app en vivo — misma limitación de
+red del README). Hallazgos y su corrección:
+
+- **Contraste de color insuficiente en el color de acento (corregido).**
+  `--accent` (rojo racing) se usa sobre todo como **texto** — mensajes de
+  error, enlaces, el logotipo — y solo alcanzaba ~4.25:1 contra el fondo
+  oscuro y ~4.33:1 contra el claro, por debajo del 4.5:1 que exige AA para
+  texto normal. Un solo tono no puede pasar 4.5:1 contra un fondo muy
+  oscuro Y uno muy claro a la vez (matemáticamente: el rango de luminancia
+  que sirve para uno excluye al otro), así que `--accent` ahora es
+  **distinto por tema**: `racing-red-400` (más brillante, ~5.5:1) en modo
+  oscuro, `racing-red-600` (más oscuro, ~6:1) en modo claro. Se agregó un
+  token separado, `--accent-solid` (`racing-red-600` fijo en ambos temas),
+  para donde el acento es un **fondo sólido** con texto claro encima
+  (botón primario, badge "accent") — ahí sí importa un tono que funcione
+  bien con texto blanco específicamente (~6.5:1), sin importar el tema.
+- **Texto blanco sobre verde en modo claro (corregido).** El badge/estado
+  "positive" usaba texto blanco sobre `tech-green-600` en modo claro
+  (~3:1, falla AA). Se cambió `--positive-foreground` a un texto oscuro en
+  modo claro (~6.5:1) — modo oscuro ya usaba un texto oscuro sobre
+  `tech-green-500` y no necesitó cambio.
+- **Indicador de urgencia sin badge (corregido).** `/app/casos` marcaba la
+  urgencia "crítica"/"alta" con texto de color plano (`text-accent`/
+  `text-warning`) en vez del componente `Badge` ya usado en el resto de la
+  tabla — inconsistente y, en el caso de `text-warning`, por debajo de
+  4.5:1 en modo claro. Ahora usa `<Badge variant="accent"|"warning">`,
+  igual que el resto de indicadores de estado.
+- **Errores de formulario sin anunciarse a lectores de pantalla
+  (corregido).** El patrón `{state.error && <p>...</p>}` que usan ~11
+  formularios de Server Actions (superadmin, facturación, TAP
+  Intelligence, sucursales, tarjetas, configuración, casos, equipo,
+  reportes programados, onboarding, encuesta pública) no tenía
+  `role="alert"` — un error después de enviar el formulario no se anuncia
+  si el foco no se movió. Los formularios de auth (`/login`, `/registro`,
+  `/restablecer`, `/demo`) ya lo tenían; se igualó el resto.
+- **Chips de categoría sin estado expuesto (corregido).** En la encuesta
+  pública (`/r/[code]`), los botones de categoría ("¿Qué ocurrió?") solo
+  comunicaban su selección con color — se agregó `aria-pressed`.
+- **Filtros por enlace sin indicar cuál está activo (corregido).** Los
+  filtros de estado en `/app/casos` y `/app/alertas` son `<Link>` que
+  cambian el color activo solo visualmente — se agregó
+  `aria-current="true"` al filtro seleccionado.
+- **Revisado y sin hallazgos**: `lang="es"` en `<html>`, skip-link
+  funcional a `#main-content`, `:focus-visible` con anillo de 2px visible
+  en toda la app, `prefers-reduced-motion` respetado, imágenes con `alt`
+  (logo de la encuesta, código QR de la tarjeta), labels asociados
+  correctamente vía `htmlFor`/`id` en todos los formularios, componentes
+  Radix (Dialog, DropdownMenu, Select, Tabs, Switch, Checkbox) que ya
+  traen manejo de foco/teclado/ARIA correcto de fábrica.
+- **No verificado en este entorno**: no se pudo correr un lector de
+  pantalla real (VoiceOver/NVDA) ni `axe-core`/Lighthouse contra la app
+  desplegada — la revisión fue manual, leyendo el JSX y calculando
+  contraste de color programáticamente (fórmula de luminancia relativa de
+  WCAG). Recomendado antes de producción.
+
+## 18. Pruebas automatizadas (Fase 5)
+
+Sin un proyecto de Supabase conectado en este entorno (ver README), las
+pruebas se dividen en lo que sí es honesto probar aquí y lo que no:
+
+**Unitarias — `npm test` (Vitest, `tests/unit/`)**: lógica pura que no
+toca la base de datos ni la red — `resolvePeriod` (rangos de fecha del
+dashboard/reportes), `can` (matriz de permisos RBAC), `hashIp`/
+`parseUserAgent`/`isLikelyBot` (`lib/tracking.ts`), `escapeHtml`
+(`lib/email.ts` — incluye un caso que reproduce el intento de inyección
+HTML corregido en la auditoría de seguridad), `isAllowedPushEndpoint`
+(`lib/notify.ts` — incluye el intento de SSRF corregido), `cn`/
+`generatePublicCode` (`lib/utils.ts`), y `confidenceFor`/
+`satisfactionScore` de `lib/intelligence.ts` (se exportaron desde el motor
+de TAP Intelligence específicamente para poder probarlas). El paquete
+`server-only` se alias a un no-op en `vitest.config.mts` porque su
+comportamiento real (lanzar si se importa fuera de un Server Component) no
+tiene sentido bajo un test runner de Node plano.
+
+**End-to-end — `npm run test:e2e` (Playwright, `tests/e2e/`)**: solo lo
+que no depende de Supabase — el sitio público (home, precios con su
+fallback honesto de "no pudimos cargar los planes", páginas legales, 404,
+el skip-link por teclado), el formulario `/demo` completo (valida con Zod
+y opcionalmente manda correo por Resend, que se salta con gracia sin
+`RESEND_API_KEY` — no toca la base de datos, así que sí se puede probar de
+extremo a extremo) y que `/login`/`/registro`/`/recuperar` renderizan con
+sus campos correctamente etiquetados. **No** se prueban los flujos que sí
+requieren Supabase (registro real, tap de tarjeta NFC, encuesta completa,
+dashboard con datos, TAP Intelligence, Stripe) — eso necesita un proyecto
+de Supabase de pruebas y credenciales reales, ninguno de los dos
+disponibles en este entorno.
+
+**Cobertura pendiente para antes de producción**: pruebas de integración
+contra un Supabase real (o local vía `supabase start`) que ejerciten
+RLS con usuarios reales — la metodología ya se usó manualmente varias
+veces durante el desarrollo (Postgres real + rol sin `BYPASSRLS`, ver §3),
+pero no está automatizada como suite repetible todavía.
+
+## 19. Optimización de Core Web Vitals (Fase 5)
+
+Enfocada en `/t/[code]` → `/r/[code]`, la única ruta que un cliente real
+recorre en cada tap físico — el resto de la app la usa el negocio, no sus
+clientes, así que su latencia importa menos.
+
+- **`/t/[code]` (`app/t/[code]/route.ts`) pasó de 5 a 3 etapas
+  secuenciales de base de datos.** El chequeo de bot ahora es lo primero
+  (antes de cualquier consulta — no vale la pena gastar una consulta en
+  tráfico que se va a redirigir sin registrar nada), la búsqueda de la
+  tarjeta y el conteo de rate-limit corren en paralelo (`Promise.all`,
+  ninguno depende del otro), y el conteo de duplicados sigue siendo
+  secuencial porque sí depende de la tarjeta. El insert de `tap_events` y
+  el de `feedback_sessions` **se dejaron secuenciales a propósito**: el
+  segundo necesita el `id` que genera el primero, y paralelizarlos con un
+  UUID generado en el cliente habría cambiado el modo de falla — hoy, si
+  `tap_events` falla, `feedback_sessions` igual se crea con
+  `tap_event_id: null` (degradación elegante); paralelizado, una falla del
+  primero habría tumbado al segundo por violación de llave foránea. Se
+  prefirió confiabilidad sobre un ahorro marginal de latencia ahí.
+- **`/r/[code]` (`app/r/[code]/page.tsx`) paraleliza sesión + categorías.**
+  `getFeedbackSessionByToken` y `getFeedbackCategories` solo dependen de la
+  tarjeta ya resuelta, no una de la otra — antes corrían en serie, ahora en
+  `Promise.all`. `getSurveyCard` (`lib/data/survey.ts`) ya paralelizaba
+  organización + sucursal desde antes.
+- **CLS del logo del negocio.** El `<img>` del logo en la encuesta pública
+  (URL arbitraria subida por el negocio, así que `next/image` no aplica
+  sin una lista blanca de dominios que no existe) no tenía `width`/
+  `height`, así que el navegador no podía reservar su espacio antes de
+  cargarlo — un salto de layout justo antes de los botones de calificación,
+  el elemento más importante de toda la ruta. Se agregaron `width={160}
+  height={48}` explícitos.
+- **Ya óptimo, sin cambios**: fuentes (`next/font/google`, autohospedadas,
+  `display: "swap"`, sin bloqueo de render), `/t/*` y `/r/*` excluidos del
+  refresco de sesión de Supabase en `proxy.ts` (rutas anónimas de alto
+  tráfico), iconos de `lucide-react` importados individualmente
+  (tree-shakeable).
+- **No medido en este entorno**: sin Supabase conectado no hay manera de
+  cargar `/t/[code]`/`/r/[code]` con datos reales y correr Lighthouse o
+  medir Web Vitals de campo — las mejoras de esta sección se justifican
+  por conteo de round-trips a la base de datos y por CLS estructural
+  (ambos verificables leyendo el código), no por una métrica medida en
+  vivo. Recomendado correr Lighthouse contra un despliegue real antes de
+  producción.
+
+## 20. Datos demo (Fase 5)
+
+`supabase/seed_demo.sql` (ver README → "Datos demo") genera una
+organización de ejemplo completa con ~30 días de actividad sintética.
+Verificado igual que las migraciones — de cero contra Postgres 16 real,
+con un `auth.users` de prueba — y ese proceso encontró dos bugs reales en
+el propio script, ambos por no revisar primero qué ya hacían los triggers
+de `0005_business_logic.sql`/`0004_rls_policies.sql`:
+
+1. Insertaba manualmente la fila de `organization_members` del dueño,
+   duplicando lo que ya hace el trigger `trg_organizations_bootstrap_owner`
+   al insertar la organización (bootstrap del owner, §3) — violaba su
+   restricción de unicidad.
+2. Incrementaba manualmente `nfc_cards.total_taps`/`last_tap_at` por cada
+   tap, duplicando al trigger `trg_tap_events_increment_card` — el
+   conteo terminaba exactamente al doble del real (`sum(total_taps) = 2 ×
+   count(tap_events)`, detectado comparando ambos).
+
+Ambos se corrigieron quitando el insert/update redundante y dejando que el
+trigger correspondiente haga su trabajo — la lección general: cualquier
+script que inserte directamente en tablas con triggers de negocio debe
+verificarse contra los efectos secundarios de esos triggers, no asumir que
+está empezando de una base sin comportamiento implícito.
