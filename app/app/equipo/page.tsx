@@ -21,13 +21,30 @@ export default async function TeamPage() {
   if (!current) return null;
 
   const supabase = await createClient();
-  // See the cast note in src/lib/data/current-org.ts — embedded resource
-  // selects can't be typed against this hand-authored Database.
-  const { data: members } = (await supabase
+  // organization_members.user_id and profiles.id both reference
+  // auth.users(id) independently — there's no direct FK between the two
+  // tables, so PostgREST can't auto-embed profiles(full_name) here (it
+  // fails with PGRST200 and silently returns no rows). Fetch profiles
+  // separately and merge by id instead.
+  const { data: memberRows } = await supabase
     .from("organization_members")
-    .select("id, role, status, joined_at, profile:profiles(full_name)")
+    .select("id, user_id, role, status, joined_at")
     .eq("organization_id", current.organization.id)
-    .order("joined_at", { ascending: true })) as unknown as { data: MemberRow[] | null };
+    .order("joined_at", { ascending: true });
+
+  const userIds = (memberRows ?? []).map((m) => m.user_id);
+  const { data: profileRows } = userIds.length
+    ? await supabase.from("profiles").select("id, full_name").in("id", userIds)
+    : { data: [] };
+  const nameById = new Map((profileRows ?? []).map((p) => [p.id, p.full_name]));
+
+  const members: MemberRow[] = (memberRows ?? []).map((m) => ({
+    id: m.id,
+    role: m.role,
+    status: m.status,
+    joined_at: m.joined_at,
+    profile: { full_name: nameById.get(m.user_id) ?? null },
+  }));
 
   const canManage = can(current.role, "manage_users");
 
