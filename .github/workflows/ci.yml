@@ -25,10 +25,14 @@ jobs:
 
       - run: npm run lint
 
-      - run: npx tsc --noEmit
-
       - run: npm test
 
+      # `next build` runs a full TypeScript check as part of compiling —
+      # a standalone `tsc --noEmit` here would need `.next/types` (Next's
+      # generated ambient types for typed layout/page props) to exist
+      # first, which only `next build`/`next dev` produce. Running it
+      # before the build fails on a fresh checkout with "Cannot find name
+      # 'LayoutProps'" even though the code is correct.
       - name: Build
         run: npm run build
         env:
