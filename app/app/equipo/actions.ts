@@ -53,10 +53,17 @@ export async function inviteMember(_prev: InviteState, formData: FormData): Prom
     return { error: "No tienes permiso para invitar miembros." };
   }
 
+  // Routed through /auth/confirm rather than straight to /onboarding:
+  // Supabase's default (non-custom-SMTP) email templates put the session
+  // in the URL *fragment* (#access_token=...&type=invite), which only
+  // app/auth/confirm's client-side fallback knows how to read and turn
+  // into an actual session. It also activates this pending membership and
+  // sends the person to set a password before /onboarding ever runs — see
+  // app/auth/confirm/actions.ts.
   const admin = createAdminClient();
   const { data: invited, error: inviteError } = await admin.auth.admin.inviteUserByEmail(
     parsed.data.email,
-    { redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/onboarding` }
+    { redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/confirm?next=/onboarding` }
   );
 
   if (inviteError || !invited.user) {

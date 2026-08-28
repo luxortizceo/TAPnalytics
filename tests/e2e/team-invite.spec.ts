@@ -78,11 +78,15 @@ test.describe("Accepting a team invitation", () => {
   }) => {
     // generateLink(type: "invite") both creates the auth user and returns
     // the same kind of link inviteUserByEmail() would have emailed them —
-    // this is the real production path, not a stand-in for it.
+    // this is the real production path, not a stand-in for it. redirectTo
+    // matches exactly what app/app/equipo/actions.ts passes in production
+    // (?next=/onboarding and all) — a mismatch here would let this test
+    // pass while the real invite flow stays broken, exactly like the bug
+    // this test exists to catch.
     const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
       type: "invite",
       email: inviteeEmail,
-      options: { redirectTo: `${baseURL}/auth/confirm` },
+      options: { redirectTo: `${baseURL}/auth/confirm?next=/onboarding` },
     });
     if (linkError || !linkData) throw new Error(`No se pudo generar el link de invitación: ${linkError?.message}`);
     inviteeId = linkData.user.id;

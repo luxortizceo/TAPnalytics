@@ -87,9 +87,15 @@ export async function requestPasswordReset(
     return { fieldErrors: firstFieldErrors(parsed.error) };
   }
 
+  // Routed through /auth/confirm rather than straight to /restablecer:
+  // Supabase's default (non-custom-SMTP) email templates put the session
+  // in the URL *fragment* (#access_token=...&type=recovery), which only
+  // app/auth/confirm's client-side fallback knows how to read and turn
+  // into an actual session — /restablecer itself has no session-handling
+  // logic at all. See app/auth/confirm/confirm-client.tsx.
   const supabase = await createClient();
   await supabase.auth.resetPasswordForEmail(parsed.data.email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/restablecer`,
+    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/confirm?next=/restablecer`,
   });
 
   // Always respond the same way whether or not the email exists, so the
