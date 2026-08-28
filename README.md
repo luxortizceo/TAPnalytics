@@ -120,7 +120,8 @@ Abre [http://localhost:3000](http://localhost:3000).
 npm run lint
 npm run build     # compila, tipa y prerrenderiza — es la verificación más completa
 npm test          # unitarias (Vitest) — lógica pura, sin Supabase
-npm run test:e2e  # end-to-end (Playwright) — sitio público y formularios sin Supabase
+npm run test:e2e  # end-to-end (Playwright) — sitio público, formularios, y el flujo
+                  # completo registro→onboarding→tap→encuesta→caso si hay Supabase real
 ```
 
 `npm run test:e2e` compila y levanta la app (`next build && next start`) en
@@ -128,6 +129,15 @@ el puerto 3100 automáticamente. Si `npx playwright install` no descargó un
 Chromium (por ejemplo, en un entorno con red restringida que ya trae uno
 preinstalado), define `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/ruta/al/binario`
 para usarlo en vez de descargar uno nuevo.
+
+`tests/e2e/full-flow.spec.ts` es el único test que toca una base de datos
+real: crea un usuario y una organización de prueba (vía la Admin API, sin
+depender de confirmar un correo), recorre el onboarding completo, tapea la
+tarjeta NFC como cliente anónimo, califica "mala" y verifica que el caso
+resultante existe tanto en la base de datos como en `/app/casos`. Se salta
+solo si faltan `NEXT_PUBLIC_SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`, y
+limpia todo lo que crea al terminar (`organizations` en cascada + el usuario
+de Auth) — seguro de correr repetidamente contra un proyecto compartido.
 
 ## Estructura del proyecto
 
@@ -284,11 +294,17 @@ Genera las llaves de Web Push con `npx web-push generate-vapid-keys`.
 ### 4. Reportes programados
 
 `/api/cron/reports` no se dispara solo — este proyecto no tiene worker ni
-cola propios (ver `docs/architecture.md` §11). Prográmalo con lo que ya
-uses: **Vercel Cron** (`vercel.json` con un `crons` que haga `POST` a esa
-ruta con `Authorization: Bearer $CRON_SECRET`), GitHub Actions con un
-`schedule`, o cualquier otro programador HTTP. Una vez al día es
-suficiente — la ruta revisa qué `report_schedules` ya vencieron.
+cola propios (ver `docs/architecture.md` §11). El repo ya incluye
+`vercel.json` con un cron diario a esa ruta — solo define `CRON_SECRET`
+como variable de entorno en el proyecto de Vercel y este la agrega
+automáticamente como header `Authorization: Bearer $CRON_SECRET` en cada
+llamada (así funciona el cron nativo de Vercel — ver [su
+documentación](https://vercel.com/docs/cron-jobs/manage-cron-jobs#securing-cron-jobs)).
+Ajusta el horario (`0 13 * * *`, UTC) a lo que prefieras. La ruta acepta
+tanto `GET` (lo único que el cron de Vercel puede invocar) como `POST` (por
+si prefieres GitHub Actions con un `schedule` + `curl -X POST`, o cualquier
+otro programador HTTP). Una vez al día es suficiente — la ruta revisa qué
+`report_schedules` ya vencieron.
 
 ### 5. Superadministrador
 
@@ -298,22 +314,30 @@ acceder a `/admin`.
 
 ### Antes de producción
 
-Este proyecto se desarrolló en un entorno sin acceso a un Supabase real ni
-a redes externas (ver limitaciones en `docs/architecture.md`), así que lo
-siguiente está construido y verificado por lectura/tipos/Postgres local,
-pero **no probado contra infraestructura real todavía**:
+Este proyecto se desarrolló originalmente en un entorno sin acceso a un
+Supabase real ni a redes externas (ver limitaciones en
+`docs/architecture.md`). Ya se conectó un proyecto real, se corrieron las
+migraciones, y varios de los puntos de esta lista ya se resolvieron:
 
-- Correr las migraciones contra tu Supabase real y repetir la prueba de
-  aislamiento de RLS de `docs/architecture.md` §3 con usuarios reales.
-- Probar el flujo completo de un tap físico → encuesta → caso/alerta →
-  dashboard con datos reales (no solo con Postgres local).
+- ✅ Migraciones aplicadas contra un Supabase real, con RLS activo en las
+  32 tablas y los `GRANT` de tabla que Supabase normalmente configura solo.
+- ✅ Flujo completo probado contra datos reales: registro → onboarding →
+  tap NFC → encuesta → caso → dashboard (`tests/e2e/full-flow.spec.ts`,
+  automatizado y repetible, no solo manual).
+- ✅ Content-Security-Policy real con nonce por request (`proxy.ts`,
+  `script-src` estricto con `'strict-dynamic'`; `'unsafe-eval'` solo fuera
+  de producción, para HMR/debugging de React).
+
+Sigue pendiente:
+
+- Repetir la prueba de aislamiento de RLS de `docs/architecture.md` §3 con
+  dos usuarios/organizaciones reales (confirmar que ninguno ve datos del
+  otro).
 - Probar el checkout y el webhook de Stripe con una tarjeta de prueba.
 - Correr Lighthouse/Web Vitals de campo contra `/t/[code]`→`/r/[code]`
-  desplegado (ver `docs/architecture.md` §19).
+  ya desplegado en un dominio real (no localhost).
 - Correr un lector de pantalla real contra la app (ver
   `docs/architecture.md` §17).
-- Decidir sobre una Content-Security-Policy (`next.config.ts` no trae una
-  — ver `docs/architecture.md` §16).
 
 ## Aviso legal del producto
 

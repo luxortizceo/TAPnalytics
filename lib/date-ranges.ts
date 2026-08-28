@@ -14,6 +14,24 @@ function startOfDay(d: Date) {
   return copy;
 }
 
+// `new Date("2026-01-01")` parses a date-only string as UTC midnight (per
+// the ECMAScript spec), while every other date in this file is built and
+// read in local time. In any timezone west of UTC — including
+// America/Mexico_City, this app's default — that UTC midnight lands on the
+// *previous* local day, silently shifting a custom report range by almost
+// 24 hours. Parsing the y/m/d components directly into a local Date avoids
+// the UTC/local mismatch entirely.
+function parseDateOnlyLocal(value: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  if (!match) return null;
+  const [y, m, d] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  const date = new Date(y, m - 1, d);
+  // Reject overflow like "2026-02-30", which JS would otherwise silently
+  // roll into March 2nd.
+  if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return null;
+  return date;
+}
+
 export function resolvePeriod(
   period: string | undefined,
   from: string | undefined,
@@ -22,11 +40,13 @@ export function resolvePeriod(
   const now = new Date();
 
   if (period === "custom" && from && to) {
-    const start = new Date(from);
-    const end = new Date(to);
-    end.setHours(23, 59, 59, 999);
-    if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && start <= end) {
-      return { key: "custom", start, end };
+    const start = parseDateOnlyLocal(from);
+    const end = parseDateOnlyLocal(to);
+    if (start && end) {
+      end.setHours(23, 59, 59, 999);
+      if (start <= end) {
+        return { key: "custom", start, end };
+      }
     }
   }
 

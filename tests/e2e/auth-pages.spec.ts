@@ -1,9 +1,10 @@
 import { test, expect } from "@playwright/test";
 
 // Render-only: submitting these forms invokes a Server Action that calls
-// Supabase Auth, which isn't connected in this environment (see
-// docs/architecture.md). Verifying the form itself renders correctly and
-// is keyboard/label-accessible is still meaningful on its own.
+// Supabase Auth — deliberately out of scope here so this file passes with
+// or without a live project connected (see tests/e2e/full-flow.spec.ts for
+// the real submit-and-persist coverage). Verifying the form itself renders
+// correctly and is keyboard/label-accessible is still meaningful on its own.
 test.describe("Auth pages render correctly", () => {
   test("/login has an accessible email/password form", async ({ page }) => {
     await page.goto("/login");

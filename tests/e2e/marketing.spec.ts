@@ -16,9 +16,19 @@ test.describe("Public marketing site", () => {
     await expect(page).toHaveURL(/#main-content$/);
   });
 
+  const hasSupabase = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
+
   test("pricing page shows an honest fallback when Supabase isn't configured", async ({ page }) => {
+    test.skip(hasSupabase, "This project has a live Supabase project connected — see the test below instead.");
     await page.goto("/precios");
     await expect(page.getByText(/No pudimos cargar los planes/i)).toBeVisible();
+  });
+
+  test("pricing page shows real plans when Supabase is connected", async ({ page }) => {
+    test.skip(!hasSupabase, "Requires NEXT_PUBLIC_SUPABASE_URL — see the fallback test above instead.");
+    await page.goto("/precios");
+    await expect(page.getByText(/No pudimos cargar los planes/i)).not.toBeVisible();
+    await expect(page.getByText(/días de prueba gratuita/i).first()).toBeVisible();
   });
 
   test.describe("legal pages", () => {

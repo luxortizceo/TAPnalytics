@@ -1,10 +1,26 @@
 import { defineConfig, devices } from "@playwright/test";
 
+// Next.js loads .env.local automatically for the app server (see the
+// webServer command below), but the Playwright test runner is a separate
+// Node process that doesn't — load it here too so tests/e2e/full-flow.spec.ts
+// can see NEXT_PUBLIC_SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY and skip itself
+// correctly instead of always skipping. No-op if the file doesn't exist
+// (e.g. CI without a live Supabase project).
+try {
+  process.loadEnvFile(".env.local");
+} catch {
+  // .env.local not present — fine, env-dependent tests skip themselves.
+}
+
 /**
- * Covers only what doesn't need a live Supabase project — this environment
- * has none connected (see README/docs/architecture.md). Public marketing
- * pages, auth page rendering, and client-side validation are fair game;
- * anything that submits a Server Action touching the database is not.
+ * Most of this suite deliberately avoids needing a live Supabase project —
+ * public marketing pages, auth page rendering, and client-side validation
+ * are fair game without one; anything that submits a Server Action touching
+ * the database is not, so `npm run test:e2e` still passes in an environment
+ * with no project connected (e.g. a fresh clone before `supabase` setup).
+ * tests/e2e/full-flow.spec.ts is the one exception — it exercises the real
+ * database end-to-end and skips itself when the required env vars are
+ * missing instead of failing.
  */
 export default defineConfig({
   testDir: "./tests/e2e",

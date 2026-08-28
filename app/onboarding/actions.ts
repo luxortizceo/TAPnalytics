@@ -65,6 +65,7 @@ export async function createOrganizationAction(
     .single();
 
   if (error || !org) {
+    console.error("createOrganizationAction failed", error);
     return { error: "No pudimos crear tu empresa. Intenta de nuevo." };
   }
 

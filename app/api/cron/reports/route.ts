@@ -49,7 +49,12 @@ function summaryHtml(orgName: string, data: Awaited<ReturnType<typeof getDashboa
   `;
 }
 
-export async function POST(request: Request) {
+// Exported as both GET and POST: Vercel Cron Jobs always invoke the
+// configured path with GET (see vercel.json) and there's no way to change
+// that, while other schedulers people wire up by hand (GitHub Actions
+// `schedule` + curl, cron + curl, etc. — see README.md §4) commonly default
+// to POST. Same auth/logic either way.
+async function handleCronRequest(request: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || !isAuthorized(request, secret)) {
     return Response.json({ error: "No autorizado." }, { status: 401 });
@@ -106,3 +111,6 @@ export async function POST(request: Request) {
 
   return Response.json({ sent });
 }
+
+export const GET = handleCronRequest;
+export const POST = handleCronRequest;
