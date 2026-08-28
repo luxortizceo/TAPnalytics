@@ -8,7 +8,7 @@ export function Hero() {
         <div>
           <span className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-muted-foreground">
             <span className="size-1.5 rounded-full bg-positive" aria-hidden />
-            NFC + IA para experiencia de cliente · prueba de despliegue ✅
+            NFC + IA para experiencia de cliente
           </span>
           <h1 className="mt-6 text-4xl font-semibold leading-tight tracking-tight text-foreground sm:text-5xl">
             Convierte cada tap en una decisión inteligente.
