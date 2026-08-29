@@ -9,10 +9,24 @@ import { ConfirmClient } from "./confirm-client";
 export default async function ConfirmPage({
   searchParams,
 }: {
-  searchParams: Promise<{ token_hash?: string; type?: string; next?: string }>;
+  searchParams: Promise<{ token_hash?: string; type?: string; code?: string; next?: string }>;
 }) {
-  const { token_hash, type, next } = await searchParams;
+  const { token_hash, type, code, next } = await searchParams;
   const fallback = next && next.startsWith("/") ? next : "/onboarding";
+
+  // Server-initiated flows (password reset, signup confirmation triggered
+  // from a Server Action) go through @supabase/ssr's default PKCE flow:
+  // Supabase's hosted /verify redirects here with ?code=... rather than a
+  // token_hash or fragment tokens. exchangeCodeForSession reads the
+  // matching code_verifier cookie that was set when the flow started.
+  if (code) {
+    const supabase = await createClient();
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (!error) {
+      redirect(await resolvePostAuthRedirect(fallback));
+    }
+    redirect("/login?error=confirm_link_invalid");
+  }
 
   if (token_hash && type) {
     const supabase = await createClient();
