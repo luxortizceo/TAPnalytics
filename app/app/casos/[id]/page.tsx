@@ -7,7 +7,7 @@ import { can } from "@/lib/permissions";
 import { ROLE_LABELS } from "@/lib/labels";
 import { CASE_STATUS_LABELS, URGENCY_LABELS } from "@/lib/labels";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { StatusSelect, UrgencySelect, AssignSelect, NotesForm } from "./case-detail-client";
+import { StatusSelect, UrgencySelect, AssignSelect, NotesForm, GenerateSuggestionButton } from "./case-detail-client";
 import type { OrgRole } from "@/lib/supabase/types";
 
 export const metadata = { title: "Detalle del caso" };
@@ -147,6 +147,44 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
                   {caseRow.contact_phone && <p>{caseRow.contact_phone}</p>}
                 </div>
               )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Sugerencia de TAP Intelligence</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              {caseRow.ai_suggestion ? (
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground">Diagnóstico</p>
+                    <p className="mt-1 text-sm text-foreground">{caseRow.ai_suggestion.diagnosis}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground">Mensaje sugerido para el cliente</p>
+                    <p className="mt-1 whitespace-pre-line text-sm text-foreground">
+                      {caseRow.ai_suggestion.customerResponse}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground">Acción interna recomendada</p>
+                    <p className="mt-1 text-sm text-foreground">{caseRow.ai_suggestion.internalAction}</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Generado por IA{" "}
+                    {caseRow.ai_suggestion_generated_at &&
+                      `el ${new Date(caseRow.ai_suggestion_generated_at).toLocaleString("es-MX")}`}
+                    . Revísalo antes de usarlo — tú conoces al cliente mejor que el modelo.
+                  </p>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Aún no hay sugerencia para este caso (puede tardar unos segundos en generarse tras crearse, o la
+                  IA no está configurada).
+                </p>
+              )}
+              {canManage && <GenerateSuggestionButton caseId={id} hasSuggestion={!!caseRow.ai_suggestion} />}
             </CardContent>
           </Card>
 

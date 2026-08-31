@@ -67,3 +67,68 @@ export async function analyzeSentiment(texts: string[]): Promise<SentimentResult
     return null;
   }
 }
+
+const CaseSuggestionSchema = z.object({
+  diagnosis: z.string().describe("Diagnóstico breve de qué salió mal para este cliente, en español, máximo 2 frases"),
+  customerResponse: z
+    .string()
+    .describe(
+      "Mensaje breve sugerido para responder o hablar directamente con este cliente, en español, tono empático y profesional, listo para usarse casi tal cual"
+    ),
+  internalAction: z
+    .string()
+    .describe(
+      "Acción interna concreta que el negocio debería tomar para resolver o prevenir este problema específico, en español"
+    ),
+});
+
+export type CaseSuggestion = {
+  diagnosis: string;
+  customerResponse: string;
+  internalAction: string;
+};
+
+/**
+ * Da una sugerencia de cómo manejar un caso (reporte negativo) puntual: qué
+ * pasó, qué decirle al cliente y qué hacer internamente. Devuelve null si la
+ * IA no está configurada o si la llamada falla — nunca lanza, para que la
+ * creación del caso nunca dependa de esto.
+ */
+export async function suggestCaseResolution(input: {
+  comments: string[];
+  categories: string[];
+  urgency: string;
+  rating: string;
+}): Promise<CaseSuggestion | null> {
+  if (!client) return null;
+
+  const commentsText = input.comments.filter((c) => c.trim().length > 0).join("\n---\n") || "(sin comentario de texto)";
+
+  try {
+    const response = await client.messages.parse({
+      model,
+      max_tokens: 1024,
+      output_config: {
+        effort: "medium",
+        format: zodOutputFormat(CaseSuggestionSchema),
+      },
+      messages: [
+        {
+          role: "user",
+          content:
+            `Un cliente dejó esta retroalimentación negativa en un negocio local ` +
+            `(calificación: ${input.rating}, urgencia asignada: ${input.urgency}).\n` +
+            `Categorías del problema marcadas: ${input.categories.join(", ") || "ninguna"}.\n` +
+            `Comentario(s) del cliente:\n${commentsText}\n\n` +
+            "Ayuda al dueño o encargado del negocio a resolver este caso puntual de la mejor " +
+            "manera posible, con un mensaje que pueda usar para responderle al cliente y una " +
+            "acción interna concreta.",
+        },
+      ],
+    });
+    return response.parsed_output ?? null;
+  } catch (error) {
+    console.error("[ai] suggestCaseResolution failed", error);
+    return null;
+  }
+}

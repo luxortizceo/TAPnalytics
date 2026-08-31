@@ -5,7 +5,7 @@
  * repo's file count down (used to be case-controls.tsx + notes-form.tsx).
  */
 
-import { useActionState, useEffect, useRef, useTransition } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { Textarea } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,7 +17,14 @@ import {
 } from "@/components/ui/select";
 import { CASE_STATUS_LABELS, CASE_STATUS_ORDER, URGENCY_LABELS } from "@/lib/labels";
 import type { CaseStatus, UrgencyLevel } from "@/lib/supabase/types";
-import { updateCaseStatus, updateCaseUrgency, assignCase, addCaseNote, type CaseActionState } from "../actions";
+import {
+  updateCaseStatus,
+  updateCaseUrgency,
+  assignCase,
+  addCaseNote,
+  generateCaseSuggestion,
+  type CaseActionState,
+} from "../actions";
 
 export function StatusSelect({ caseId, value }: { caseId: string; value: CaseStatus }) {
   const [pending, startTransition] = useTransition();
@@ -117,5 +124,35 @@ export function NotesForm({ caseId }: { caseId: string }) {
         {pending ? "Guardando…" : "Agregar nota"}
       </Button>
     </form>
+  );
+}
+
+export function GenerateSuggestionButton({ caseId, hasSuggestion }: { caseId: string; hasSuggestion: boolean }) {
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <div className="flex flex-col gap-2">
+      <Button
+        variant="secondary"
+        size="sm"
+        className="w-fit"
+        disabled={pending}
+        onClick={() =>
+          startTransition(async () => {
+            setError(null);
+            const result = await generateCaseSuggestion(caseId);
+            if (result.error) setError(result.error);
+          })
+        }
+      >
+        {pending ? "Generando…" : hasSuggestion ? "Regenerar sugerencia" : "Generar sugerencia con IA"}
+      </Button>
+      {error && (
+        <p role="alert" className="text-xs text-accent">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }

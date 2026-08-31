@@ -30,7 +30,7 @@ export default async function CasesPage({
     (async () => {
       let query = supabase
         .from("cases")
-        .select("id, folio, rating, urgency, status, created_at, due_at, location_id")
+        .select("id, folio, rating, urgency, status, created_at, due_at, location_id, ai_suggestion")
         .eq("organization_id", current.organization.id)
         .order("created_at", { ascending: false })
         .limit(100);
@@ -113,6 +113,14 @@ export default async function CasesPage({
                     <Link href={`/app/casos/${c.id}`} className="font-mono text-xs font-medium text-foreground underline underline-offset-2">
                       {c.folio}
                     </Link>
+                    {c.ai_suggestion && (
+                      <span
+                        title="Ya tiene sugerencia de TAP Intelligence"
+                        className="ml-2 rounded-full bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent"
+                      >
+                        IA
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">{locationById.get(c.location_id) ?? "—"}</td>
                   <td className="px-4 py-3">

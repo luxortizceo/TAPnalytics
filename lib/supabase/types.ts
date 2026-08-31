@@ -363,10 +363,18 @@ export type CaseRow = {
   contact_name: string | null;
   contact_email: string | null;
   contact_phone: string | null;
+  ai_suggestion: CaseAiSuggestion | null;
+  ai_suggestion_generated_at: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
 }
+
+export type CaseAiSuggestion = {
+  diagnosis: string;
+  customerResponse: string;
+  internalAction: string;
+};
 
 export type CaseNoteRow = {
   id: string;

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { generateCaseAiSuggestion } from "@/lib/cases";
 import type { CaseStatus, UrgencyLevel } from "@/lib/supabase/types";
 
 export type CaseActionState = { error?: string; success?: boolean };
@@ -130,6 +131,16 @@ export async function addCaseNote(
 
   if (error) return { error: "No pudimos guardar la nota." };
 
+  revalidatePath(`/app/casos/${caseId}`);
+  return { success: true };
+}
+
+export async function generateCaseSuggestion(caseId: string): Promise<CaseActionState> {
+  const supabase = await createClient();
+  const suggestion = await generateCaseAiSuggestion(supabase, caseId);
+  if (!suggestion) {
+    return { error: "No pudimos generar una sugerencia (o la IA no está configurada todavía)." };
+  }
   revalidatePath(`/app/casos/${caseId}`);
   return { success: true };
 }

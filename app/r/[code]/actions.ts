@@ -1,10 +1,11 @@
 "use server";
 
 import { cookies } from "next/headers";
+import { after } from "next/server";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getFeedbackSessionByToken, getSurveyCard } from "@/lib/data/survey";
-import { createCaseFromFeedback } from "@/lib/cases";
+import { createCaseFromFeedback, generateCaseAiSuggestion } from "@/lib/cases";
 import { createAlertAndNotify } from "@/lib/alerts";
 import type { ExperienceRating, UrgencyLevel } from "@/lib/supabase/types";
 
@@ -182,6 +183,12 @@ export async function submitFeedback(
       contactEmail: canStoreContact ? parsed.data.contactEmail || null : null,
       contactPhone: canStoreContact ? parsed.data.contactPhone || null : null,
     });
+
+    // No bloquea la respuesta al cliente: la sugerencia de IA se genera
+    // después de enviar la página de "gracias" (ver next/server `after`).
+    if (createdCase) {
+      after(() => generateCaseAiSuggestion(admin, createdCase.id));
+    }
 
     await createAlertAndNotify(admin, {
       organizationId: resolved.card.organizationId,
