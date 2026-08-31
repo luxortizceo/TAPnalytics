@@ -172,16 +172,18 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
                     <p className="mt-1 text-sm text-foreground">{caseRow.ai_suggestion.internalAction}</p>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Generado por IA{" "}
+                    {caseRow.ai_suggestion.source === "ai"
+                      ? "Generado por IA"
+                      : "De la base de soluciones pre-escritas"}
                     {caseRow.ai_suggestion_generated_at &&
-                      `el ${new Date(caseRow.ai_suggestion_generated_at).toLocaleString("es-MX")}`}
-                    . Revísalo antes de usarlo — tú conoces al cliente mejor que el modelo.
+                      ` el ${new Date(caseRow.ai_suggestion_generated_at).toLocaleString("es-MX")}`}
+                    . Revísalo antes de usarlo — tú conoces al cliente mejor que esta sugerencia.
                   </p>
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  Aún no hay sugerencia para este caso (puede tardar unos segundos en generarse tras crearse, o la
-                  IA no está configurada).
+                  Aún no hay sugerencia para este caso (puede tardar unos segundos en generarse tras crearse, o
+                  ninguna de sus categorías tiene una entrada en la base de soluciones todavía).
                 </p>
               )}
               {canManage && <GenerateSuggestionButton caseId={id} hasSuggestion={!!caseRow.ai_suggestion} />}

@@ -139,7 +139,10 @@ export async function generateCaseSuggestion(caseId: string): Promise<CaseAction
   const supabase = await createClient();
   const suggestion = await generateCaseAiSuggestion(supabase, caseId);
   if (!suggestion) {
-    return { error: "No pudimos generar una sugerencia (o la IA no está configurada todavía)." };
+    return {
+      error:
+        "Ninguna de las categorías de este caso tiene una entrada en la base de soluciones todavía, y la IA no está configurada (o no pudo generar una sugerencia).",
+    };
   }
   revalidatePath(`/app/casos/${caseId}`);
   return { success: true };

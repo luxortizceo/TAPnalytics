@@ -374,6 +374,17 @@ export type CaseAiSuggestion = {
   diagnosis: string;
   customerResponse: string;
   internalAction: string;
+  source: "playbook" | "ai";
+};
+
+export type SolutionPlaybookRow = {
+  id: string;
+  category_code: string;
+  diagnosis: string;
+  customer_response: string;
+  internal_action: string;
+  created_at: string;
+  updated_at: string;
 };
 
 export type CaseNoteRow = {
@@ -627,6 +638,11 @@ export type Database = {
         GoogleReviewSnapshotRow,
         Insertable<GoogleReviewSnapshotRow>,
         Updatable<GoogleReviewSnapshotRow>
+      >;
+      solution_playbook: Table<
+        SolutionPlaybookRow,
+        Insertable<SolutionPlaybookRow>,
+        Updatable<SolutionPlaybookRow>
       >;
       nfc_card_history: Table<
         NfcCardHistoryRow,

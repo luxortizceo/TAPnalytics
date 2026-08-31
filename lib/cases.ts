@@ -57,9 +57,41 @@ export async function createCaseFromFeedback(
 }
 
 /**
- * Genera (o regenera) la sugerencia de IA de un caso: diagnóstico, mensaje
- * para el cliente y acción interna, a partir de su comentario y categorías.
- * Best-effort — si la IA no está configurada o falla, no toca la fila.
+ * Busca en la base de soluciones pre-escritas (public.solution_playbook) una
+ * entrada que coincida con alguna de las categorías del caso. Es la fuente
+ * principal de sugerencias: no depende de ninguna API externa ni tiene
+ * costo. Devuelve la primera coincidencia, respetando el orden en el que se
+ * etiquetaron las categorías del caso.
+ */
+async function findPlaybookMatch(
+  client: SupabaseClient<Database>,
+  categoryCodes: string[]
+): Promise<Omit<CaseAiSuggestion, "source"> | null> {
+  if (categoryCodes.length === 0) return null;
+
+  const { data } = await client
+    .from("solution_playbook")
+    .select("category_code, diagnosis, customer_response, internal_action")
+    .in("category_code", categoryCodes);
+  if (!data || data.length === 0) return null;
+
+  const byCode = new Map(data.map((row) => [row.category_code, row]));
+  const match = categoryCodes.map((code) => byCode.get(code)).find((row) => !!row);
+  if (!match) return null;
+
+  return {
+    diagnosis: match.diagnosis,
+    customerResponse: match.customer_response,
+    internalAction: match.internal_action,
+  };
+}
+
+/**
+ * Genera (o regenera) la sugerencia de un caso: diagnóstico, mensaje para el
+ * cliente y acción interna. Primero busca en la base de soluciones
+ * pre-escritas (gratis, instantánea); solo si ninguna categoría del caso
+ * tiene entrada ahí, intenta la IA como refuerzo (best-effort — si no está
+ * configurada o falla, no toca la fila).
  */
 export async function generateCaseAiSuggestion(
   client: SupabaseClient<Database>,
@@ -67,23 +99,24 @@ export async function generateCaseAiSuggestion(
 ): Promise<CaseAiSuggestion | null> {
   const { data: caseRow } = await client
     .from("cases")
-    .select("id, summary, urgency, rating, feedback_session_id")
+    .select("id, summary, urgency, rating, feedback_session_id, contact_name")
     .eq("id", caseId)
     .single();
   if (!caseRow) return null;
 
   let comments: string[] = [];
-  let categories: string[] = [];
+  const categoryCodes: string[] = [];
+  const categoryLabels: string[] = [];
 
   if (caseRow.feedback_session_id) {
     const { data: responses } = (await client
       .from("feedback_responses")
-      .select("answer_text, response_categories(feedback_categories(label))")
+      .select("answer_text, response_categories(feedback_categories(code, label))")
       .eq("feedback_session_id", caseRow.feedback_session_id)) as unknown as {
       data:
         | {
             answer_text: string | null;
-            response_categories: { feedback_categories: { label: string } | null }[];
+            response_categories: { feedback_categories: { code: string; label: string } | null }[];
           }[]
         | null;
     };
@@ -91,34 +124,44 @@ export async function generateCaseAiSuggestion(
     comments = (responses ?? [])
       .map((r) => r.answer_text)
       .filter((t): t is string => !!t && t.trim().length > 0);
-    categories = Array.from(
-      new Set(
-        (responses ?? []).flatMap((r) =>
-          (r.response_categories ?? [])
-            .map((rc) => rc.feedback_categories?.label)
-            .filter((v): v is string => !!v)
-        )
-      )
-    );
+
+    const seen = new Set<string>();
+    for (const r of responses ?? []) {
+      for (const rc of r.response_categories ?? []) {
+        const category = rc.feedback_categories;
+        if (!category || seen.has(category.code)) continue;
+        seen.add(category.code);
+        categoryCodes.push(category.code);
+        categoryLabels.push(category.label);
+      }
+    }
   }
 
   if (comments.length === 0 && caseRow.summary) comments = [caseRow.summary];
 
-  const suggestion = await suggestCaseResolution({
-    comments,
-    categories,
-    urgency: caseRow.urgency,
-    rating: caseRow.rating ?? "bad",
-  });
+  const playbookMatch = await findPlaybookMatch(client, categoryCodes);
+  const suggestion: CaseAiSuggestion | null = playbookMatch
+    ? { ...playbookMatch, source: "playbook" }
+    : await suggestCaseResolution({
+        comments,
+        categories: categoryLabels,
+        urgency: caseRow.urgency,
+        rating: caseRow.rating ?? "bad",
+      }).then((ai) => (ai ? { ...ai, source: "ai" as const } : null));
   if (!suggestion) return null;
+
+  const firstName = caseRow.contact_name?.trim().split(/\s+/)[0];
+  const personalized: CaseAiSuggestion = firstName
+    ? { ...suggestion, customerResponse: suggestion.customerResponse.replace(/^Hola,/, `Hola ${firstName},`) }
+    : suggestion;
 
   const { error } = await client
     .from("cases")
-    .update({ ai_suggestion: suggestion, ai_suggestion_generated_at: new Date().toISOString() })
+    .update({ ai_suggestion: personalized, ai_suggestion_generated_at: new Date().toISOString() })
     .eq("id", caseId);
   if (error) {
     console.error("[cases] failed to save ai_suggestion", error);
     return null;
   }
-  return suggestion;
+  return personalized;
 }

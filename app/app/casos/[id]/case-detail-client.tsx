@@ -146,7 +146,7 @@ export function GenerateSuggestionButton({ caseId, hasSuggestion }: { caseId: st
           })
         }
       >
-        {pending ? "Generando…" : hasSuggestion ? "Regenerar sugerencia" : "Generar sugerencia con IA"}
+        {pending ? "Buscando…" : hasSuggestion ? "Regenerar sugerencia" : "Buscar sugerencia"}
       </Button>
       {error && (
         <p role="alert" className="text-xs text-accent">
