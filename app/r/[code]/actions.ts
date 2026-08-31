@@ -39,6 +39,29 @@ export async function setRating(code: string, rating: ExperienceRating): Promise
   return true;
 }
 
+// Used when an "excellent" rating skips the feedback form entirely and
+// goes straight to the Google review link — there's no complaint to record,
+// but the session still needs to close out so it counts correctly in stats.
+export async function completeSession(code: string): Promise<boolean> {
+  const resolved = await resolveSession(code);
+  if (!resolved) return false;
+
+  const admin = createAdminClient();
+  await admin
+    .from("feedback_sessions")
+    .update({ status: "completed", completed_at: new Date().toISOString() })
+    .eq("id", resolved.session.id);
+
+  if (resolved.session.tap_event_id) {
+    await admin
+      .from("tap_events")
+      .update({ survey_completed: true })
+      .eq("id", resolved.session.tap_event_id);
+  }
+
+  return true;
+}
+
 export async function markReviewOpened(code: string) {
   const resolved = await resolveSession(code);
   if (!resolved?.session.tap_event_id) return;

@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import type { SurveyCard, SurveyCategory } from "@/lib/data/survey";
 import type { ExperienceRating, FeedbackSessionStatus } from "@/lib/supabase/types";
-import { setRating, submitFeedback, markReviewOpened } from "./actions";
+import { setRating, submitFeedback, markReviewOpened, completeSession } from "./actions";
 
 type Step = "rating" | "details" | "thanks";
 
@@ -55,6 +55,19 @@ export function SurveyFlow({
     setLocalRating(value);
     startTransition(async () => {
       await setRating(code, value);
+
+      // A great experience skips the internal questionnaire entirely and
+      // goes straight to the public Google review — no reason to make a
+      // happy customer answer "what went well" first. Bad/good experiences
+      // still go through the internal form so problems get captured
+      // privately instead of turning into a public review.
+      if (value === "excellent" && card.googleReviewsUrl) {
+        await completeSession(code);
+        await markReviewOpened(code);
+        window.location.href = card.googleReviewsUrl;
+        return;
+      }
+
       setStep("details");
     });
   }
@@ -143,7 +156,7 @@ export function SurveyFlow({
               Tu opinión fue registrada. {card.landing.thankYouMessage}
             </p>
           </div>
-          {card.googleReviewsUrl && (
+          {card.googleReviewsUrl && rating === "excellent" && (
             <a
               href={card.googleReviewsUrl}
               target="_blank"
