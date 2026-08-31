@@ -30,6 +30,14 @@ export interface DashboardData {
   recentComments: { rating: ExperienceRating | null; text: string; locationName: string; createdAt: string }[];
   activeAlerts: number;
   openCases: number;
+  /**
+   * Personas que, tras calificar "Excelente", abrieron el link de reseña de
+   * Google — no es el conteo real de reseñas publicadas (Google no avisa
+   * cuando alguien realmente la envía), pero es la señal más honesta que
+   * podemos medir nosotros mismos sin depender de la Places API.
+   */
+  googleReviewsOpenedInPeriod: number;
+  googleReviewsOpenedAllTime: number;
 }
 
 function satisfactionScore(counts: Record<ExperienceRating, number>): number | null {
@@ -46,7 +54,7 @@ export async function getDashboardData(filters: DashboardFilters): Promise<Dashb
 
   let tapQuery = supabase
     .from("tap_events")
-    .select("id, card_id, location_id, ip_hash, occurred_at, rating")
+    .select("id, card_id, location_id, ip_hash, occurred_at, rating, google_reviews_opened")
     .eq("organization_id", organizationId)
     .gte("occurred_at", startIso)
     .lt("occurred_at", endIso);
@@ -192,7 +200,16 @@ export async function getDashboardData(filters: DashboardFilters): Promise<Dashb
     .sort((a, b) => b.count - a.count)
     .slice(0, 6);
 
-  const [{ count: activeAlerts }, { count: openCases }] = await Promise.all([
+  const googleReviewsOpenedInPeriod = (taps ?? []).filter((t) => t.google_reviews_opened).length;
+
+  let allTimeReviewsQuery = supabase
+    .from("tap_events")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", organizationId)
+    .eq("google_reviews_opened", true);
+  if (locationId) allTimeReviewsQuery = allTimeReviewsQuery.eq("location_id", locationId);
+
+  const [{ count: activeAlerts }, { count: openCases }, { count: googleReviewsOpenedAllTime }] = await Promise.all([
     supabase
       .from("alerts")
       .select("id", { count: "exact", head: true })
@@ -203,6 +220,7 @@ export async function getDashboardData(filters: DashboardFilters): Promise<Dashb
       .select("id", { count: "exact", head: true })
       .eq("organization_id", organizationId)
       .not("status", "in", "(resolved,closed)"),
+    allTimeReviewsQuery,
   ]);
 
   return {
@@ -221,5 +239,7 @@ export async function getDashboardData(filters: DashboardFilters): Promise<Dashb
     recentComments,
     activeAlerts: activeAlerts ?? 0,
     openCases: openCases ?? 0,
+    googleReviewsOpenedInPeriod,
+    googleReviewsOpenedAllTime: googleReviewsOpenedAllTime ?? 0,
   };
 }

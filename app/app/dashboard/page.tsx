@@ -57,7 +57,22 @@ export default async function DashboardPage({
         />
         <Kpi label="Alertas activas" value={data.activeAlerts} href="/app/alertas" tone={data.activeAlerts > 0 ? "accent" : undefined} />
         <Kpi label="Casos sin resolver" value={data.openCases} href="/app/casos" tone={data.openCases > 0 ? "accent" : undefined} />
+        <Kpi
+          label="Reseñas de Google generadas"
+          value={data.googleReviewsOpenedAllTime}
+          subtext={
+            data.googleReviewsOpenedInPeriod > 0
+              ? `+${data.googleReviewsOpenedInPeriod} en este periodo`
+              : "Sin nuevas en este periodo"
+          }
+        />
       </div>
+      <p className="-mt-4 text-xs text-muted-foreground">
+        &ldquo;Reseñas de Google generadas&rdquo; cuenta a las personas que calificaron su experiencia
+        como Excelente y abrieron el link para dejar reseña — no es el número de reseñas
+        publicadas (Google no nos avisa cuando alguien la envía), pero es un antes/ahora real de
+        lo que Tapnalytics está generando.
+      </p>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
@@ -205,12 +220,14 @@ function Kpi({
   trend,
   href,
   tone,
+  subtext,
 }: {
   label: string;
   value: string | number;
   trend?: number | null;
   href?: string;
   tone?: "accent";
+  subtext?: string;
 }) {
   const content = (
     <Card>
@@ -225,6 +242,7 @@ function Kpi({
             {trend}% vs. periodo anterior
           </p>
         )}
+        {subtext && <p className="mt-1 text-xs text-muted-foreground">{subtext}</p>}
       </CardContent>
     </Card>
   );
