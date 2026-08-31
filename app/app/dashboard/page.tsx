@@ -203,11 +203,18 @@ export default async function DashboardPage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Próximamente</CardTitle>
+          <CardTitle>TAP Intelligence</CardTitle>
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground">
-          TAP Intelligence (sentimiento, detección de anomalías, recomendaciones con evidencia) y
-          reportes programables se habilitan en la Fase 4.
+          Ya está activo: detecta picos en categorías negativas, cambios en tu índice de
+          satisfacción y sucursales por debajo del promedio, con evidencia y recomendaciones de
+          seguimiento.{" "}
+          <Link href="/app/inteligencia" className="text-foreground underline underline-offset-4">
+            Ver TAP Intelligence
+          </Link>
+          . La mayoría de los hallazgos son por reglas; el análisis de sentimiento sobre
+          comentarios de texto libre sí usa inteligencia artificial (Claude) cuando está
+          configurado.
         </CardContent>
       </Card>
     </div>

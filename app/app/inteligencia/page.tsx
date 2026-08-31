@@ -61,8 +61,10 @@ export default async function IntelligencePage() {
 
       <Card>
         <CardContent className="pt-6 text-sm text-muted-foreground">
-          Motor basado en reglas y comparación de periodos — no un modelo de lenguaje externo.
-          La <strong className="text-foreground">confianza</strong> es un valor entre 0 y 1 calculado a
+          La mayoría de estos hallazgos vienen de un motor basado en reglas y comparación de
+          periodos, no de un modelo de lenguaje. El hallazgo de &quot;sentimiento&quot; es la
+          excepción: si está configurado, sí usa IA para leer el texto de los comentarios. La{" "}
+          <strong className="text-foreground">confianza</strong> es un valor entre 0 y 1 calculado a
           partir del tamaño de la muestra, no una probabilidad estadística real; siempre se muestra
           junto al periodo y la muestra que la originaron para que puedas juzgarla tú mismo.
         </CardContent>

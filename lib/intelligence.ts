@@ -1,15 +1,22 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CategoryKind, Database, ExperienceRating, InsightType } from "@/lib/supabase/types";
+import { analyzeSentiment } from "@/lib/ai";
 
 /**
- * TAP Intelligence — a rule-based analysis engine, not an external AI call.
- * It compares the current period against the equal-length previous period
- * to flag category spikes, satisfaction trends, and location gaps, then
- * writes them as `ai_insights` with the evidence that produced them plus a
- * linked `recommendations` row when the insight needs action. `confidence`
- * is a transparent heuristic based on sample size, not a statistical model
- * — same honesty rule as the dashboard's satisfaction index.
+ * TAP Intelligence — mostly a rule-based analysis engine, not an external AI
+ * call. It compares the current period against the equal-length previous
+ * period to flag category spikes, satisfaction trends, and location gaps,
+ * then writes them as `ai_insights` with the evidence that produced them
+ * plus a linked `recommendations` row when the insight needs action.
+ * `confidence` is a transparent heuristic based on sample size, not a
+ * statistical model — same honesty rule as the dashboard's satisfaction
+ * index.
+ *
+ * The one part that genuinely calls an LLM is the sentiment pass at the end
+ * (see `sentimentInsight` below) — it reads free-text comments through
+ * lib/ai.ts, which degrades to a no-op when AI_API_KEY isn't configured, so
+ * everything else here keeps working without it.
  *
  * Runs on demand (a staff member clicks "Analizar ahora") since the project
  * has no queue/cron infrastructure yet; see lib/cases.ts for the same
@@ -258,5 +265,75 @@ export async function generateInsights(admin: SupabaseClient<Database>, organiza
     }
   }
 
+  // 4. Sentiment over free-text comments (real LLM call, best-effort).
+  await sentimentInsight(admin, organizationId, periodStart.toISOString(), now.toISOString(), insertInsight);
+
   return created;
+}
+
+const SENTIMENT_SAMPLE_CAP = 40;
+const NEGATIVE_SENTIMENT_THRESHOLD = 0.3; // 30% of analyzed comments read as negative
+
+async function sentimentInsight(
+  admin: SupabaseClient<Database>,
+  organizationId: string,
+  startIso: string,
+  endIso: string,
+  insertInsight: (input: {
+    type: InsightType;
+    title: string;
+    description: string;
+    evidence: Record<string, unknown>;
+    sampleSize: number;
+    recommendation?: { description: string; suggestedAction: string };
+  }) => Promise<void>
+) {
+  const { data: sessions } = await admin
+    .from("feedback_sessions")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .gte("started_at", startIso)
+    .lt("started_at", endIso);
+  const sessionIds = (sessions ?? []).map((s) => s.id);
+  if (sessionIds.length === 0) return;
+
+  const { data: responses } = await admin
+    .from("feedback_responses")
+    .select("answer_text")
+    .in("feedback_session_id", sessionIds)
+    .not("answer_text", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(SENTIMENT_SAMPLE_CAP);
+
+  const texts = (responses ?? [])
+    .map((r) => r.answer_text)
+    .filter((t): t is string => !!t && t.trim().length > 0);
+  if (texts.length < MIN_SAMPLE) return;
+
+  const results = await analyzeSentiment(texts);
+  if (!results || results.length === 0) return;
+
+  const negative = results.filter((r) => r.sentiment === "negative");
+  const ratio = negative.length / results.length;
+  if (ratio < NEGATIVE_SENTIMENT_THRESHOLD) return;
+
+  const examples = negative.slice(0, 3).map((r) => r.summary);
+  await insertInsight({
+    type: "summary",
+    title: "Sentimiento negativo detectado en comentarios",
+    description: `De ${results.length} comentarios analizados por IA en los últimos 30 días, ${negative.length} (${Math.round(ratio * 100)}%) tienen un tono negativo — más allá de lo que capturan las categorías etiquetadas.`,
+    evidence: {
+      analyzed: results.length,
+      negative: negative.length,
+      ratio: Math.round(ratio * 100) / 100,
+      examples,
+      source: "claude-sentiment-analysis",
+    },
+    sampleSize: results.length,
+    recommendation: {
+      description:
+        "Varios comentarios recientes tienen un tono negativo que vale la pena revisar en su propio texto, no solo por su calificación numérica.",
+      suggestedAction: "Leer los comentarios completos en Casos/Reportes y confirmar si reflejan un problema puntual o algo más amplio.",
+    },
+  });
 }
