@@ -204,6 +204,7 @@ export type LocationRow = {
   currency: string;
   language: string;
   google_reviews_url: string | null;
+  google_place_id: string | null;
   opening_hours: Record<string, unknown>;
   settings: Record<string, unknown>;
   created_at: string;
@@ -235,6 +236,15 @@ export type NfcCardRow = {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+}
+
+export type GoogleReviewSnapshotRow = {
+  id: string;
+  organization_id: string;
+  location_id: string;
+  review_count: number;
+  rating: number | null;
+  captured_at: string;
 }
 
 export type TapEventRow = {
@@ -605,6 +615,11 @@ export type Database = {
         Updatable<MemberLocationRow>
       >;
       nfc_cards: Table<NfcCardRow, Insertable<NfcCardRow>, Updatable<NfcCardRow>>;
+      google_review_snapshots: Table<
+        GoogleReviewSnapshotRow,
+        Insertable<GoogleReviewSnapshotRow>,
+        Updatable<GoogleReviewSnapshotRow>
+      >;
       nfc_card_history: Table<
         NfcCardHistoryRow,
         Insertable<NfcCardHistoryRow>,
