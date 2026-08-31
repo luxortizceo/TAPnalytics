@@ -15,6 +15,13 @@ const apiKey = process.env.AI_API_KEY;
 const model = process.env.AI_MODEL || "claude-opus-5";
 const client = apiKey ? new Anthropic({ apiKey }) : null;
 
+// TEMP DEBUG — never logs the value itself, only whether it's set and how
+// long it is. Remove once we confirm AI_API_KEY is read correctly in prod.
+console.log(
+  "[ai] AI_API_KEY diagnostic:",
+  apiKey ? `set, length ${apiKey.length}, prefix ${apiKey.slice(0, 12)}` : "NOT SET"
+);
+
 const SentimentResultSchema = z.object({
   results: z.array(
     z.object({
