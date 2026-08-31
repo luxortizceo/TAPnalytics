@@ -23,6 +23,15 @@ const RATING_OPTIONS: {
   { value: "excellent", label: "Excelente", icon: Smile, tone: "border-positive/40 hover:bg-positive/10" },
 ];
 
+// Plain top-level function (not a component/hook) so the React Compiler
+// doesn't flag the window mutation below — this must run synchronously
+// inside the click handler, with no `await` before it, so iOS Safari still
+// treats it as a direct user-gesture navigation and hands off to the
+// installed Google Maps app instead of opening the link in-browser.
+function navigateTo(url: string) {
+  window.location.href = url;
+}
+
 const URGENCY_OPTIONS: { value: string; label: string }[] = [
   { value: "low", label: "Baja" },
   { value: "medium", label: "Media" },
@@ -53,21 +62,29 @@ export function SurveyFlow({
 
   function chooseRating(value: ExperienceRating) {
     setLocalRating(value);
+
+    // A great experience skips the internal questionnaire entirely and goes
+    // straight to the public Google review — no reason to make a happy
+    // customer answer "what went well" first. Bad/good experiences still go
+    // through the internal form so problems get captured privately instead
+    // of turning into a public review.
+    if (value === "excellent" && card.googleReviewsUrl) {
+      // Tracking calls are fired but NOT awaited, and the redirect happens
+      // synchronously, in the same tick as the click. Awaiting a server
+      // action first (a real network round trip) breaks the browser's
+      // "recent user gesture" window — on iOS, Safari then opens the review
+      // link as a normal web page (forcing a sign-in) instead of handing off
+      // to the already-authenticated Google Maps app. The redirect must be
+      // the very next thing that happens after the tap, not after a fetch.
+      void setRating(code, value);
+      void completeSession(code);
+      void markReviewOpened(code);
+      navigateTo(card.googleReviewsUrl);
+      return;
+    }
+
     startTransition(async () => {
       await setRating(code, value);
-
-      // A great experience skips the internal questionnaire entirely and
-      // goes straight to the public Google review — no reason to make a
-      // happy customer answer "what went well" first. Bad/good experiences
-      // still go through the internal form so problems get captured
-      // privately instead of turning into a public review.
-      if (value === "excellent" && card.googleReviewsUrl) {
-        await completeSession(code);
-        await markReviewOpened(code);
-        window.location.href = card.googleReviewsUrl;
-        return;
-      }
-
       setStep("details");
     });
   }
