@@ -71,7 +71,7 @@ export default async function ReportsPage({
             </a>
           </Button>
           <PrintButton />
-          <SavePdfButton />
+          <SavePdfButton exportParams={exportParams.toString()} />
         </div>
       </div>
 

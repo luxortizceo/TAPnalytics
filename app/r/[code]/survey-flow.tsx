@@ -9,8 +9,9 @@ import { cn } from "@/lib/utils";
 import type { SurveyCard, SurveyCategory } from "@/lib/data/survey";
 import type { ExperienceRating, FeedbackSessionStatus } from "@/lib/supabase/types";
 import { setRating, submitFeedback, markReviewOpened } from "./actions";
+import { RatingBurst, RATING_BURST_DURATION_MS } from "./rating-burst";
 
-type Step = "rating" | "details" | "thanks";
+type Step = "rating" | "details" | "thanks" | "excellent-cta";
 
 const RATING_OPTIONS: {
   value: ExperienceRating;
@@ -59,38 +60,47 @@ export function SurveyFlow({
   const [pending, startTransition] = useTransition();
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [wantsContact, setWantsContact] = useState(false);
+  const [burst, setBurst] = useState<ExperienceRating | null>(null);
 
   function chooseRating(value: ExperienceRating) {
     setLocalRating(value);
+    setBurst(value);
 
-    // A great experience skips the internal questionnaire entirely and goes
-    // straight to the public Google review — no reason to make a happy
-    // customer answer "what went well" first. Bad/good experiences still go
-    // through the internal form so problems get captured privately instead
-    // of turning into a public review.
-    if (value === "excellent" && card.googleReviewsUrl) {
-      // The redirect must happen synchronously, in the same tick as the
-      // click — awaiting a server action first (a real network round trip)
-      // breaks the browser's "recent user gesture" window, so on iOS Safari
-      // would then open the review link as a normal web page (forcing a
-      // sign-in) instead of handing off to the already-authenticated Google
-      // Maps app. sendBeacon fires the session-completion write without
-      // blocking that redirect, and — unlike a plain fetch — the browser
-      // guarantees it's delivered even though the page navigates away right
-      // after (see app/r/[code]/beacon/route.ts for what it does).
-      navigator.sendBeacon(`/r/${code}/beacon`);
-      navigateTo(card.googleReviewsUrl);
-      return;
-    }
+    // A great experience skips the internal questionnaire entirely — no
+    // reason to make a happy customer answer "what went well" first — and
+    // instead offers a direct button to the public Google review. Bad/good
+    // experiences still go through the internal form so problems get
+    // captured privately instead of turning into a public review.
+    const skipToReview = value === "excellent" && !!card.googleReviewsUrl;
 
-    startTransition(async () => {
-      await setRating(code, value);
-      setStep("details");
-    });
+    // Let the burst animation play out before advancing the step.
+    window.setTimeout(() => {
+      setBurst(null);
+      if (skipToReview) {
+        setStep("excellent-cta");
+        return;
+      }
+      startTransition(async () => {
+        await setRating(code, value);
+        setStep("details");
+      });
+    }, RATING_BURST_DURATION_MS);
   }
 
   async function handleReviewClick() {
     await markReviewOpened(code);
+  }
+
+  function goToGoogleReview() {
+    if (!card.googleReviewsUrl) return;
+    // Fired from this button's own click — a fresh user gesture — so the
+    // same-tab redirect below still hands off to the Google Maps app on
+    // iOS instead of opening a plain web page. sendBeacon records the
+    // session completion without making that redirect wait on it (and,
+    // unlike a plain fetch, is guaranteed delivered even though the page
+    // navigates away right after — see app/r/[code]/beacon/route.ts).
+    navigator.sendBeacon(`/r/${code}/beacon`);
+    navigateTo(card.googleReviewsUrl);
   }
 
   const relevantCategories = categories.filter((c) =>
@@ -127,12 +137,12 @@ export function SurveyFlow({
             <p className="text-sm text-muted-foreground">{card.landing.welcomeMessage}</p>
             <h1 className="mt-2 text-2xl font-semibold tracking-tight">{card.landing.mainQuestion}</h1>
           </div>
-          <div className="grid w-full grid-cols-3 gap-3">
+          <div className="relative grid w-full grid-cols-3 gap-3">
             {RATING_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
                 type="button"
-                disabled={pending}
+                disabled={pending || burst !== null}
                 onClick={() => chooseRating(opt.value)}
                 className={cn(
                   "flex flex-col items-center gap-2 rounded-lg border bg-surface px-3 py-6 text-sm font-medium transition-colors disabled:opacity-50",
@@ -143,7 +153,31 @@ export function SurveyFlow({
                 {opt.label}
               </button>
             ))}
+            {burst && <RatingBurst variant={burst} />}
           </div>
+        </div>
+      )}
+
+      {step === "excellent-cta" && (
+        <div className="flex flex-col items-center gap-6 text-center">
+          <div className="flex size-16 items-center justify-center rounded-full border-2 border-positive text-positive">
+            <Smile className="size-8" aria-hidden />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold">¡Qué gusto!</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Nos encantaría que compartieras tu experiencia en Google.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={goToGoogleReview}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-positive px-5 py-3 text-sm font-medium text-positive-foreground hover:opacity-90"
+          >
+            Dejar una reseña en Google
+            <ExternalLink className="size-4" />
+          </button>
+          <p className="text-xs text-muted-foreground">Ya puedes cerrar esta ventana.</p>
         </div>
       )}
 
