@@ -1,6 +1,9 @@
 import Link from "next/link";
+import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentOrganization } from "@/lib/data/current-org";
+import { OPEN_CASE_STATUSES } from "@/lib/intelligence";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/primitives";
 import { INSIGHT_TYPE_LABELS } from "@/lib/labels";
@@ -47,10 +50,46 @@ export default async function IntelligencePage() {
 
   const recommendationByInsight = new Map((recommendations ?? []).map((r) => [r.ai_insight_id, r]));
 
+  // Un hallazgo "critical_case" se genera una vez y queda guardado — si el
+  // caso se resuelve después, ese hallazgo no se borra solo. Aquí se
+  // verifica el estado actual de cada caso referenciado y se descarta
+  // (además de limpiarlo de la base en segundo plano) el hallazgo si el
+  // caso ya no está abierto.
+  const criticalCaseInsights = (insights ?? []).filter(
+    (i): i is AiInsightRow & { evidence: { case_id: string } } =>
+      i.type === "critical_case" && typeof i.evidence.case_id === "string"
+  );
+  let openCaseIds = new Set<string>();
+  if (criticalCaseInsights.length > 0) {
+    const { data: referencedCases } = await supabase
+      .from("cases")
+      .select("id, status")
+      .eq("organization_id", organizationId)
+      .in(
+        "id",
+        criticalCaseInsights.map((i) => i.evidence.case_id)
+      );
+    openCaseIds = new Set(
+      (referencedCases ?? [])
+        .filter((c) => (OPEN_CASE_STATUSES as string[]).includes(c.status))
+        .map((c) => c.id)
+    );
+  }
+  const staleInsightIds = criticalCaseInsights
+    .filter((i) => !openCaseIds.has(i.evidence.case_id))
+    .map((i) => i.id);
+  if (staleInsightIds.length > 0) {
+    after(async () => {
+      const admin = createAdminClient();
+      await admin.from("ai_insights").delete().in("id", staleInsightIds);
+    });
+  }
+  const visibleInsights = (insights ?? []).filter((i) => !staleInsightIds.includes(i.id));
+
   // Los casos críticos/urgentes van siempre primero, sin importar cuándo se
   // generó el hallazgo — es lo que el equipo necesita ver de inmediato al
   // entrar aquí.
-  const sortedInsights = (insights ?? [])
+  const sortedInsights = visibleInsights
     .slice()
     .sort((a, b) => {
       const aCritical = a.type === "critical_case" ? 1 : 0;

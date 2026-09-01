@@ -353,7 +353,7 @@ async function sentimentInsight(
   });
 }
 
-const OPEN_CASE_STATUSES = ["new", "reviewing", "in_progress", "waiting_response"] satisfies CaseStatus[];
+export const OPEN_CASE_STATUSES = ["new", "reviewing", "in_progress", "waiting_response"] satisfies CaseStatus[];
 
 /**
  * Un hallazgo por cada caso crítico o de alta urgencia que siga abierto —
