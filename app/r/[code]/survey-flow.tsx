@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import type { SurveyCard, SurveyCategory } from "@/lib/data/survey";
 import type { ExperienceRating, FeedbackSessionStatus } from "@/lib/supabase/types";
-import { setRating, submitFeedback, markReviewOpened, completeSession } from "./actions";
+import { setRating, submitFeedback, markReviewOpened } from "./actions";
 
 type Step = "rating" | "details" | "thanks";
 
@@ -69,16 +69,16 @@ export function SurveyFlow({
     // through the internal form so problems get captured privately instead
     // of turning into a public review.
     if (value === "excellent" && card.googleReviewsUrl) {
-      // Tracking calls are fired but NOT awaited, and the redirect happens
-      // synchronously, in the same tick as the click. Awaiting a server
-      // action first (a real network round trip) breaks the browser's
-      // "recent user gesture" window — on iOS, Safari then opens the review
-      // link as a normal web page (forcing a sign-in) instead of handing off
-      // to the already-authenticated Google Maps app. The redirect must be
-      // the very next thing that happens after the tap, not after a fetch.
-      void setRating(code, value);
-      void completeSession(code);
-      void markReviewOpened(code);
+      // The redirect must happen synchronously, in the same tick as the
+      // click — awaiting a server action first (a real network round trip)
+      // breaks the browser's "recent user gesture" window, so on iOS Safari
+      // would then open the review link as a normal web page (forcing a
+      // sign-in) instead of handing off to the already-authenticated Google
+      // Maps app. sendBeacon fires the session-completion write without
+      // blocking that redirect, and — unlike a plain fetch — the browser
+      // guarantees it's delivered even though the page navigates away right
+      // after (see app/r/[code]/beacon/route.ts for what it does).
+      navigator.sendBeacon(`/r/${code}/beacon`);
       navigateTo(card.googleReviewsUrl);
       return;
     }
