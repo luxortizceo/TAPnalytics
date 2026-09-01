@@ -303,6 +303,36 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
               </p>
             </CardContent>
           </Card>
+
+          {caseRow.resolution_email_sent_at && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Seguimiento con el cliente</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-2 text-xs text-muted-foreground">
+                <p>
+                  Correo enviado: {new Date(caseRow.resolution_email_sent_at).toLocaleString("es-MX")}
+                </p>
+                {caseRow.resolution_rating ? (
+                  <>
+                    <p className="text-sm text-foreground">
+                      Calificó la solución:{" "}
+                      <strong>
+                        {caseRow.resolution_rating === "bad"
+                          ? "Mala"
+                          : caseRow.resolution_rating === "good"
+                            ? "Buena"
+                            : "Excelente"}
+                      </strong>
+                    </p>
+                    {caseRow.resolution_comment && <p className="text-foreground">“{caseRow.resolution_comment}”</p>}
+                  </>
+                ) : (
+                  <p>Esperando respuesta del cliente.</p>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>

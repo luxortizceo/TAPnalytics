@@ -379,6 +379,11 @@ export type CaseRow = {
   contact_phone: string | null;
   ai_suggestion: CaseAiSuggestion | null;
   ai_suggestion_generated_at: string | null;
+  resolution_feedback_token: string | null;
+  resolution_email_sent_at: string | null;
+  resolution_rating: ExperienceRating | null;
+  resolution_rating_at: string | null;
+  resolution_comment: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;

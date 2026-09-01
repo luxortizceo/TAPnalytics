@@ -1,7 +1,9 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { nanoid } from "nanoid";
 import type { CaseAiSuggestion, Database, ExperienceRating, UrgencyLevel } from "@/lib/supabase/types";
 import { suggestCaseResolution } from "@/lib/ai";
+import { sendTransactionalEmail, escapeHtml } from "@/lib/email";
 import { URGENCY_LABELS } from "@/lib/labels";
 
 // Default response-time SLA by urgency, used to set cases.due_at when a
@@ -291,4 +293,60 @@ export async function generateCaseAiSuggestion(
     return null;
   }
   return personalized;
+}
+
+/**
+ * Cierra el ciclo con el cliente: cuando un caso pasa a "resuelto" (ver
+ * app/app/casos/actions.ts), si dejó su correo, se le manda un enlace de un
+ * solo uso para que califique cómo quedó la solución — mismo espíritu que
+ * el tap físico original, pero para el seguimiento. No hace nada si no hay
+ * correo, o si ya se envió antes (evita reenviar en reaperturas del mismo
+ * caso). Best-effort: si Resend no está configurado, lib/email.ts ya
+ * degrada a un no-op sin fallar la actualización del caso.
+ */
+export async function sendCaseResolutionEmail(client: SupabaseClient<Database>, caseId: string) {
+  const { data: caseRow } = await client
+    .from("cases")
+    .select("id, folio, organization_id, contact_name, contact_email, resolution_email_sent_at")
+    .eq("id", caseId)
+    .single();
+  if (!caseRow || !caseRow.contact_email || caseRow.resolution_email_sent_at) return;
+
+  const token = nanoid(32);
+  const { error: updateError } = await client
+    .from("cases")
+    .update({ resolution_feedback_token: token, resolution_email_sent_at: new Date().toISOString() })
+    .eq("id", caseId);
+  if (updateError) {
+    console.error("[cases] failed to save resolution_feedback_token", updateError);
+    return;
+  }
+
+  const { data: org } = await client
+    .from("organizations")
+    .select("name")
+    .eq("id", caseRow.organization_id)
+    .single();
+
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const link = `${siteUrl}/f/${token}`;
+  const firstName = caseRow.contact_name?.trim().split(/\s+/)[0];
+  const orgName = org?.name ?? "El establecimiento";
+  const greeting = firstName ? `Hola ${escapeHtml(firstName)},` : "Hola,";
+
+  await sendTransactionalEmail({
+    to: caseRow.contact_email,
+    subject: `Ya resolvimos tu caso ${caseRow.folio}`,
+    html: `
+      <p>${greeting}</p>
+      <p>Queremos avisarte que ya dimos seguimiento a lo que reportaste.</p>
+      <p><strong>¿Qué tan satisfecho quedaste con la solución?</strong></p>
+      <p>
+        <a href="${link}?r=bad" style="margin-right:12px;">😞 Mala</a>
+        <a href="${link}?r=good" style="margin-right:12px;">🙂 Buena</a>
+        <a href="${link}?r=excellent">😃 Excelente</a>
+      </p>
+      <p style="color:#767b86;font-size:12px;">— ${escapeHtml(orgName)} vía Tapnalytics</p>
+    `,
+  });
 }

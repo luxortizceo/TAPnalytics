@@ -1,8 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { generateCaseAiSuggestion } from "@/lib/cases";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { generateCaseAiSuggestion, sendCaseResolutionEmail } from "@/lib/cases";
 import type { CaseStatus, UrgencyLevel } from "@/lib/supabase/types";
 
 export type CaseActionState = { error?: string; success?: boolean };
@@ -46,6 +48,14 @@ export async function updateCaseStatus(
       old_value: current.status,
       new_value: status,
     });
+  }
+
+  // Cierra el ciclo con el cliente: si dejó su correo, se le manda un
+  // enlace para calificar cómo quedó la solución. No bloquea la respuesta
+  // al usuario — ver el mismo patrón con generateCaseAiSuggestion arriba.
+  if (status === "resolved" && current.status !== "resolved") {
+    const admin = createAdminClient();
+    after(() => sendCaseResolutionEmail(admin, caseId));
   }
 
   revalidatePath("/app/casos");
