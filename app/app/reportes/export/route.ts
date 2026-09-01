@@ -94,8 +94,13 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  const csv = [header, ...rows].map((row) => row.map(csvEscape).join(",")).join("\n");
-  return new NextResponse(`﻿${csv}`, {
+  // "sep=," as the first line forces Excel to use comma as the field
+  // separator regardless of the system locale. Without it, Excel on a
+  // Spanish-language OS (comma is the decimal separator there) defaults to
+  // semicolon, which crams every column into one — making comentario y
+  // urgencia look "missing" even though the file has them.
+  const csv = [header, ...rows].map((row) => row.map(csvEscape).join(",")).join("\r\n");
+  return new NextResponse(`﻿sep=,\r\n${csv}`, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
       "Content-Disposition": `attachment; filename="tapnalytics-reporte-${datestamp}.csv"`,

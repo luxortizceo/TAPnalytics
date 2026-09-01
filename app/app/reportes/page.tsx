@@ -7,7 +7,7 @@ import { resolvePeriod, PERIOD_LABELS } from "@/lib/date-ranges";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PeriodFilter } from "../dashboard/period-filter";
-import { PrintButton } from "./print-button";
+import { PrintButton, SavePdfButton } from "./print-button";
 import { CreateScheduleForm, ScheduleList } from "./schedule-ui";
 import type { ReportScheduleRow } from "@/lib/supabase/types";
 
@@ -71,6 +71,7 @@ export default async function ReportsPage({
             </a>
           </Button>
           <PrintButton />
+          <SavePdfButton />
         </div>
       </div>
 
