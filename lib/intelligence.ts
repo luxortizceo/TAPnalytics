@@ -1,7 +1,15 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { CategoryKind, Database, ExperienceRating, InsightType } from "@/lib/supabase/types";
+import type {
+  CaseStatus,
+  CategoryKind,
+  Database,
+  ExperienceRating,
+  InsightType,
+  UrgencyLevel,
+} from "@/lib/supabase/types";
 import { analyzeSentiment } from "@/lib/ai";
+import { URGENCY_LABELS } from "@/lib/labels";
 
 /**
  * TAP Intelligence — mostly a rule-based analysis engine, not an external AI
@@ -268,6 +276,13 @@ export async function generateInsights(admin: SupabaseClient<Database>, organiza
   // 4. Sentiment over free-text comments (real LLM call, best-effort).
   await sentimentInsight(admin, organizationId, periodStart.toISOString(), now.toISOString(), insertInsight);
 
+  // 5. Casos críticos/urgentes sin resolver — no depende del periodo de 30
+  // días: un caso crítico sigue siendo crítico sin importar cuándo se creó,
+  // mientras siga abierto. Se corre al final para que, en un mismo run,
+  // quede como el hallazgo más reciente (aunque la página igual lo ordena
+  // primero explícitamente — ver app/app/inteligencia/page.tsx).
+  await criticalCasesInsight(admin, organizationId, insertInsight);
+
   return created;
 }
 
@@ -336,4 +351,51 @@ async function sentimentInsight(
       suggestedAction: "Leer los comentarios completos en Casos/Reportes y confirmar si reflejan un problema puntual o algo más amplio.",
     },
   });
+}
+
+const OPEN_CASE_STATUSES = ["new", "reviewing", "in_progress", "waiting_response"] satisfies CaseStatus[];
+
+/**
+ * Un hallazgo por cada caso crítico o de alta urgencia que siga abierto —
+ * no depende del periodo de 30 días ni de ningún umbral de muestra: basta
+ * un caso así para que valga la pena mostrarlo. La página de TAP
+ * Intelligence lo ordena siempre primero (ver app/app/inteligencia/page.tsx).
+ */
+async function criticalCasesInsight(
+  admin: SupabaseClient<Database>,
+  organizationId: string,
+  insertInsight: (input: {
+    type: InsightType;
+    title: string;
+    description: string;
+    evidence: Record<string, unknown>;
+    sampleSize: number;
+    recommendation?: { description: string; suggestedAction: string };
+    locationId?: string | null;
+  }) => Promise<void>
+) {
+  const { data: openCases } = await admin
+    .from("cases")
+    .select("id, folio, urgency, summary, location_id")
+    .eq("organization_id", organizationId)
+    .in("urgency", ["critical", "high"] satisfies UrgencyLevel[])
+    .in("status", OPEN_CASE_STATUSES)
+    .order("created_at", { ascending: false });
+
+  for (const c of openCases ?? []) {
+    await insertInsight({
+      type: "critical_case",
+      title: `Caso ${c.urgency === "critical" ? "crítico" : "urgente"} sin resolver: ${c.folio}`,
+      description: c.summary
+        ? `"${c.summary}" — este caso tiene prioridad ${URGENCY_LABELS[c.urgency]} y sigue abierto. Abre el caso para ver la sugerencia de TAP Intelligence con los pasos a seguir, incluyendo cómo desescalar si la situación lo amerita.`
+        : `El caso ${c.folio} tiene prioridad ${URGENCY_LABELS[c.urgency]} y sigue abierto — requiere atención inmediata.`,
+      evidence: { case_id: c.id, folio: c.folio, urgency: c.urgency },
+      sampleSize: 1,
+      locationId: c.location_id,
+      recommendation: {
+        description: `Este caso no se ha resuelto y su prioridad es "${URGENCY_LABELS[c.urgency]}".`,
+        suggestedAction: `Abrir el caso ${c.folio}, revisar su sugerencia de TAP Intelligence y actuar de inmediato.`,
+      },
+    });
+  }
 }

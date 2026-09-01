@@ -84,7 +84,8 @@ export type InsightType =
   | "recurring_issue"
   | "summary"
   | "comparison"
-  | "recommendation_impact";
+  | "recommendation_impact"
+  | "critical_case";
 export type RecommendationStatus = "open" | "in_progress" | "done" | "dismissed";
 export type CorrectiveActionStatus = "planned" | "in_progress" | "done" | "canceled";
 export type SubscriptionStatus = "trialing" | "active" | "past_due" | "canceled" | "incomplete" | "unpaid";

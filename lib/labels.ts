@@ -69,6 +69,7 @@ export const INSIGHT_TYPE_LABELS: Record<InsightType, string> = {
   summary: "Resumen",
   comparison: "Comparativa",
   recommendation_impact: "Impacto de recomendación",
+  critical_case: "Caso crítico",
 };
 
 export const RECOMMENDATION_STATUS_LABELS: Record<RecommendationStatus, string> = {

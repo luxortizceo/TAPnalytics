@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrganization } from "@/lib/data/current-org";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -46,14 +47,27 @@ export default async function IntelligencePage() {
 
   const recommendationByInsight = new Map((recommendations ?? []).map((r) => [r.ai_insight_id, r]));
 
+  // Los casos críticos/urgentes van siempre primero, sin importar cuándo se
+  // generó el hallazgo — es lo que el equipo necesita ver de inmediato al
+  // entrar aquí.
+  const sortedInsights = (insights ?? [])
+    .slice()
+    .sort((a, b) => {
+      const aCritical = a.type === "critical_case" ? 1 : 0;
+      const bCritical = b.type === "critical_case" ? 1 : 0;
+      if (aCritical !== bCritical) return bCritical - aCritical;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+
   return (
     <div className="flex flex-col gap-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">TAP Intelligence</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Anomalías, problemas recurrentes y comparativas detectadas en los últimos 30 días,
-            con la evidencia que las respalda.
+            Casos críticos o urgentes sin resolver (siempre primero), anomalías, problemas
+            recurrentes y comparativas detectadas en los últimos 30 días, con la evidencia que
+            las respalda.
           </p>
         </div>
         <RefreshInsightsButton />
@@ -70,7 +84,7 @@ export default async function IntelligencePage() {
         </CardContent>
       </Card>
 
-      {!insights || insights.length === 0 ? (
+      {sortedInsights.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
             Sin hallazgos todavía. Da clic en &quot;Analizar ahora&quot; para procesar los últimos 30 días
@@ -79,14 +93,19 @@ export default async function IntelligencePage() {
         </Card>
       ) : (
         <div className="flex flex-col gap-4">
-          {insights.map((insight) => {
+          {sortedInsights.map((insight) => {
             const recommendation = recommendationByInsight.get(insight.id);
+            const isCritical = insight.type === "critical_case";
+            const caseId =
+              isCritical && typeof insight.evidence.case_id === "string" ? insight.evidence.case_id : null;
             return (
-              <Card key={insight.id}>
+              <Card key={insight.id} className={isCritical ? "border-accent" : undefined}>
                 <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3">
                   <div>
                     <div className="flex items-center gap-2">
-                      <Badge variant={NEGATIVE_TYPES.includes(insight.type) ? "outline" : "positive"}>
+                      <Badge
+                        variant={isCritical ? "accent" : NEGATIVE_TYPES.includes(insight.type) ? "outline" : "positive"}
+                      >
                         {INSIGHT_TYPE_LABELS[insight.type]}
                       </Badge>
                       {insight.confidence !== null && (
@@ -103,6 +122,15 @@ export default async function IntelligencePage() {
                 </CardHeader>
                 <CardContent className="flex flex-col gap-4">
                   <p className="text-sm text-foreground">{insight.description}</p>
+
+                  {caseId && (
+                    <Link
+                      href={`/app/casos/${caseId}`}
+                      className="w-fit text-sm font-medium text-accent underline underline-offset-4"
+                    >
+                      Ver sugerencias y consejos para resolver este caso →
+                    </Link>
+                  )}
 
                   {recommendation && (
                     <div className="rounded-md border border-border bg-surface-2 p-4">

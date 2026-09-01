@@ -13,6 +13,32 @@ const DUE_HOURS_BY_URGENCY: Record<UrgencyLevel, number> = {
   low: 120,
 };
 
+// Detecta menciones de acoso o conducta inapropiada en el texto libre del
+// cliente. Un cliente que vive esto puede no marcar la categoría correcta
+// (o el catálogo puede no tenerla) — este detector es la red de seguridad:
+// escala la urgencia del caso a "critical" sin importar lo que se haya
+// seleccionado, y prioriza la entrada "harassment" del playbook por encima
+// de cualquier otra categoría etiquetada. Deliberadamente no incluye
+// palabras ambiguas como "tocó" (común en modismos sin relación, ej. "me
+// tocó esperar") para evitar falsos positivos.
+const SAFETY_CONCERN_PATTERNS = [
+  /acos/i, // acoso, acosador, acosando, acosadoramente
+  /manose/i, // manoseo, manosear
+  /abus/i, // abuso, abusó, abusivo
+  /amenaz/i, // amenaza, amenazó
+  /agresi/i, // agresión, agresivo
+  /agredi/i, // agredió
+  /violenci/i, // violencia
+  /discrimin/i, // discriminación, discriminó
+  /se propas/i, // se propasó
+  /insinuaci[oó]n/i, // insinuaciones (sexuales)
+];
+
+export function detectsSafetyConcern(text: string | null | undefined): boolean {
+  if (!text) return false;
+  return SAFETY_CONCERN_PATTERNS.some((pattern) => pattern.test(text));
+}
+
 export async function createCaseFromFeedback(
   admin: SupabaseClient<Database>,
   input: {
@@ -27,9 +53,12 @@ export async function createCaseFromFeedback(
     contactPhone: string | null;
   }
 ) {
-  const dueAt = new Date(
-    Date.now() + DUE_HOURS_BY_URGENCY[input.urgency] * 60 * 60 * 1000
-  ).toISOString();
+  // Un reporte de acoso siempre es crítico, sin importar la urgencia que el
+  // cliente haya seleccionado en el formulario (puede no haber sabido que
+  // existía una opción más alta, o el formulario puede no reflejarlo bien).
+  const urgency: UrgencyLevel = detectsSafetyConcern(input.summary) ? "critical" : input.urgency;
+
+  const dueAt = new Date(Date.now() + DUE_HOURS_BY_URGENCY[urgency] * 60 * 60 * 1000).toISOString();
 
   const { data, error } = await admin
     .from("cases")
@@ -39,7 +68,7 @@ export async function createCaseFromFeedback(
       feedback_session_id: input.feedbackSessionId,
       rating: input.rating,
       summary: input.summary?.slice(0, 240) || null,
-      urgency: input.urgency,
+      urgency,
       status: "new",
       due_at: dueAt,
       contact_name: input.contactName,
@@ -138,6 +167,13 @@ export async function generateCaseAiSuggestion(
   }
 
   if (comments.length === 0 && caseRow.summary) comments = [caseRow.summary];
+
+  // Prioriza la entrada de acoso del playbook por encima de cualquier
+  // categoría etiquetada si el texto del cliente lo sugiere — ver
+  // detectsSafetyConcern.
+  if (comments.some((c) => detectsSafetyConcern(c)) && !categoryCodes.includes("harassment")) {
+    categoryCodes.unshift("harassment");
+  }
 
   const playbookMatch = await findPlaybookMatch(client, categoryCodes);
   const suggestion: CaseAiSuggestion | null = playbookMatch
