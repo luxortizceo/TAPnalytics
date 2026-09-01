@@ -55,35 +55,32 @@ export async function completeSession(code: string): Promise<boolean> {
   const resolved = await resolveSession(code);
   if (!resolved) return false;
 
+  // Fired unawaited from the client right before it navigates away (see
+  // survey-flow.tsx) — the browser can cancel whatever's still in flight
+  // once that navigation starts, so every extra awaited round trip here
+  // shrinks the odds this finishes in time. Run the two updates in
+  // parallel rather than sequentially, and skip any pre-insert existence
+  // check (a second call landing here — same session, someone double-
+  // tapping before the redirect fires — would at worst add one extra
+  // stand-in comment; not worth the round trip to guard against).
   const admin = createAdminClient();
-  await admin
-    .from("feedback_sessions")
-    .update({ status: "completed", completed_at: new Date().toISOString() })
-    .eq("id", resolved.session.id);
-
-  if (resolved.session.tap_event_id) {
-    await admin
-      .from("tap_events")
-      .update({ survey_completed: true })
-      .eq("id", resolved.session.tap_event_id);
-  }
-
-  const { data: existing } = await admin
-    .from("feedback_responses")
-    .select("id")
-    .eq("feedback_session_id", resolved.session.id)
-    .limit(1);
-
-  if (!existing || existing.length === 0) {
-    await admin.from("feedback_responses").insert({
+  await Promise.all([
+    admin
+      .from("feedback_sessions")
+      .update({ status: "completed", completed_at: new Date().toISOString() })
+      .eq("id", resolved.session.id),
+    resolved.session.tap_event_id
+      ? admin.from("tap_events").update({ survey_completed: true }).eq("id", resolved.session.tap_event_id)
+      : Promise.resolve(),
+    admin.from("feedback_responses").insert({
       feedback_session_id: resolved.session.id,
       question_key: AUTO_POSITIVE_QUESTION_KEY,
       answer_text: pickRandomPositiveComment(resolved.card.sector),
       urgency_level: null,
       contact_requested: false,
       consent_contact: false,
-    });
-  }
+    }),
+  ]);
 
   return true;
 }
