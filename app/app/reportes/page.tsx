@@ -108,8 +108,10 @@ export default async function ReportsPage({
           {data.satisfactionTrendPct !== null && (
             <p className="mt-3 text-sm text-muted-foreground">
               El índice de satisfacción {data.satisfactionTrendPct >= 0 ? "subió" : "bajó"}{" "}
-              <strong className="text-foreground">{Math.abs(data.satisfactionTrendPct)}%</strong> respecto
-              al periodo anterior de igual duración.
+              <strong className={data.satisfactionTrendPct >= 0 ? "text-positive" : "text-accent"}>
+                {Math.abs(data.satisfactionTrendPct)}%
+              </strong>{" "}
+              respecto al periodo anterior de igual duración.
             </p>
           )}
         </section>
@@ -120,9 +122,15 @@ export default async function ReportsPage({
               Distribución de calificaciones ({totalRated} respuestas)
             </h3>
             <div className="flex flex-col gap-2 text-sm">
-              <p>Mala: {data.ratingCounts.bad}</p>
-              <p>Buena: {data.ratingCounts.good}</p>
-              <p>Excelente: {data.ratingCounts.excellent}</p>
+              <p>
+                Mala: <strong className="text-accent">{data.ratingCounts.bad}</strong>
+              </p>
+              <p>
+                Buena: <strong className="text-warning">{data.ratingCounts.good}</strong>
+              </p>
+              <p>
+                Excelente: <strong className="text-positive">{data.ratingCounts.excellent}</strong>
+              </p>
             </div>
           </div>
           <div>

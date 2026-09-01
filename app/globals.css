@@ -158,8 +158,29 @@ body {
 
 /* Report pages (src/app/app/reportes) print just the report content —
    the app shell's sidebar/header hide via these rules instead of a
-   print-only route, so "Imprimir / Guardar como PDF" just works. */
+   print-only route, so "Imprimir / Guardar como PDF" just works.
+   Printed/PDF output always uses the light palette regardless of which
+   theme is active on screen — the app's own tokens (--surface,
+   --foreground, etc, not just body's background) get overridden here,
+   since printing the dark theme as-is left card/table backgrounds dark
+   while only body's background flipped to white. Same values as
+   :root[data-theme="light"] above. */
 @media print {
+  :root {
+    --background: #f7f7f8;
+    --surface: #ffffff;
+    --surface-2: #f0f1f3;
+    --border-color: #d9dbe0;
+    --foreground: #16171b;
+    --muted-foreground: #55585f;
+    --accent: var(--color-racing-red-600);
+    --accent-foreground: #ffffff;
+    --accent-solid: var(--color-racing-red-600);
+    --positive: var(--color-tech-green-600);
+    --positive-foreground: var(--color-graphite-950);
+    --warning: #a8720c;
+    --ring: var(--color-racing-red-600);
+  }
   aside,
   header {
     display: none !important;
@@ -168,8 +189,8 @@ body {
     padding: 0 !important;
   }
   body {
-    background: #fff;
-    color: #111;
+    background: var(--color-background);
+    color: var(--color-foreground);
   }
 }
 

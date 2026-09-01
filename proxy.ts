@@ -3,6 +3,13 @@ import { NextResponse, type NextRequest } from "next/server";
 
 const PROTECTED_PREFIXES = ["/onboarding", "/app", "/admin"];
 
+// A plain .startsWith(prefix) check treats "/apple-icon" as under "/app" —
+// same bug class for any future "/adminXyz" route under "/admin". Requires
+// an exact match or a "/" right after the prefix.
+function isProtectedPath(pathname: string) {
+  return PROTECTED_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
 const PUBLIC_HIGH_TRAFFIC_PREFIXES = ["/t/", "/r/"];
 
 // Content-Security-Policy, generated per-request with a fresh nonce (the
@@ -74,7 +81,7 @@ export async function proxy(request: NextRequest) {
   // check against.
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
     const pathname = request.nextUrl.pathname;
-    const isProtected = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
+    const isProtected = isProtectedPath(pathname);
     if (isProtected) {
       const redirectUrl = new URL("/login", request.url);
       redirectUrl.searchParams.set("next", pathname);
@@ -109,7 +116,7 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
-  const isProtected = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
+  const isProtected = isProtectedPath(pathname);
 
   if (isProtected && !user) {
     const redirectUrl = new URL("/login", request.url);

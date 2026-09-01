@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -21,6 +21,17 @@ export const metadata: Metadata = {
   },
   description:
     "Captura la experiencia de tus clientes, detecta problemas antes de que se conviertan en malas reseñas y mejora cada sucursal con datos accionables.",
+  // Agregada al inicio de pantalla, esto es lo que hace que abra en modo
+  // standalone (sin la barra de Safari) en vez de como una pestaña más.
+  appleWebApp: {
+    capable: true,
+    title: "TAPnalytics",
+    statusBarStyle: "black-translucent",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0a0b0d",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
