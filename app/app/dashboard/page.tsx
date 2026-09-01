@@ -3,9 +3,18 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrganization } from "@/lib/data/current-org";
 import { getDashboardData } from "@/lib/data/dashboard";
+import { getTrendData } from "@/lib/data/trends";
+import { getHealthData } from "@/lib/data/health";
 import { resolvePeriod } from "@/lib/date-ranges";
+import { URGENCY_LABELS } from "@/lib/labels";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PeriodFilter, RatingChart } from "./period-filter";
+import {
+  SatisfactionTrendChart,
+  LocationTrendChart,
+  CategoryTrendChart,
+  GoogleRatingTrendChart,
+} from "./trend-charts";
 
 export const metadata = { title: "Dashboard" };
 
@@ -27,12 +36,21 @@ export default async function DashboardPage({
     .eq("organization_id", current.organization.id)
     .order("name");
 
-  const data = await getDashboardData({
-    organizationId: current.organization.id,
-    locationId,
-    startDate: start,
-    endDate: end,
-  });
+  const [data, trends, health] = await Promise.all([
+    getDashboardData({
+      organizationId: current.organization.id,
+      locationId,
+      startDate: start,
+      endDate: end,
+    }),
+    getTrendData(current.organization.id),
+    getHealthData({
+      organizationId: current.organization.id,
+      locationId,
+      startDate: start,
+      endDate: end,
+    }),
+  ]);
 
   return (
     <div className="flex flex-col gap-8">
@@ -66,13 +84,120 @@ export default async function DashboardPage({
               : "Sin nuevas en este periodo"
           }
         />
+        <Kpi
+          label="Captura de contacto"
+          value={health.contactCapture.pct === null ? "—" : `${health.contactCapture.pct}%`}
+          subtext={`${health.contactCapture.withContact} de ${health.contactCapture.total} casos con datos de contacto`}
+        />
+        <Kpi
+          label="Reincidencia de casos"
+          value={health.recurrence.pct === null ? "—" : `${health.recurrence.pct}%`}
+          subtext={
+            health.recurrence.eligible > 0
+              ? `${health.recurrence.recurred} de ${health.recurrence.eligible} clientes con contacto volvieron a abrir un caso`
+              : "Aún no hay suficientes casos con contacto para medirlo"
+          }
+          tone={health.recurrence.pct !== null && health.recurrence.pct > 0 ? "accent" : undefined}
+        />
       </div>
       <p className="-mt-4 text-xs text-muted-foreground">
         &ldquo;Reseñas de Google generadas&rdquo; cuenta a las personas que calificaron su experiencia
         como Excelente y abrieron el link para dejar reseña — no es el número de reseñas
         publicadas (Google no nos avisa cuando alguien la envía), pero es un antes/ahora real de
-        lo que Tapnalytics está generando.
+        lo que Tapnalytics está generando. &ldquo;Reincidencia&rdquo; cuenta, de los clientes que
+        dejaron sus datos en un caso ya resuelto, cuántos volvieron a abrir otro caso después —
+        alto = la solución no está funcionando de verdad.
       </p>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Cumplimiento de SLA por urgencia</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {health.sla.every((s) => s.resolved === 0) ? (
+            <EmptyState text="Sin casos resueltos en este periodo." />
+          ) : (
+            <div className="flex flex-col gap-3">
+              {health.sla
+                .filter((s) => s.resolved > 0)
+                .map((s) => (
+                  <div key={s.urgency} className="flex items-center gap-3">
+                    <span className="w-20 shrink-0 text-sm text-foreground">{URGENCY_LABELS[s.urgency]}</span>
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-2">
+                      <div
+                        className={`h-full rounded-full ${
+                          s.pct !== null && s.pct >= 80 ? "bg-positive" : "bg-accent"
+                        }`}
+                        style={{ width: `${s.pct ?? 0}%` }}
+                      />
+                    </div>
+                    <span className="w-40 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+                      {s.pct === null ? "sin fecha límite" : `${s.pct}% a tiempo`} · {s.resolved} resueltos
+                    </span>
+                  </div>
+                ))}
+            </div>
+          )}
+          <p className="mt-3 text-xs text-muted-foreground">
+            % de casos resueltos antes de su fecha límite (calculada según la urgencia al crearse el
+            caso), sobre el total de casos resueltos en este periodo con esa urgencia.
+          </p>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Evolución de la satisfacción (12 semanas)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <SatisfactionTrendChart data={trends.satisfactionTrend} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Evolución por sucursal (12 semanas)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {trends.locationNames.length === 0 ? (
+              <EmptyState text="Sin sucursales activas." />
+            ) : (
+              <LocationTrendChart data={trends.locationTrend} locationNames={trends.locationNames} />
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Evolución de categorías negativas (12 semanas)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {trends.topCategoryLabels.length === 0 ? (
+              <EmptyState text="Sin categorías negativas registradas en las últimas 12 semanas." />
+            ) : (
+              <CategoryTrendChart data={trends.categoryTrend} categoryLabels={trends.topCategoryLabels} />
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Reseñas de Google en el tiempo</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {!trends.hasGoogleData ? (
+              <p className="text-sm text-muted-foreground">
+                Sin historial todavía. Esto requiere que la sucursal tenga configurado su Google
+                Place ID y que la captura automática diaria ya haya corrido al menos una vez —
+                puede tardar hasta 24 horas después de configurarlo.
+              </p>
+            ) : (
+              <GoogleRatingTrendChart data={trends.googleTrend} />
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
