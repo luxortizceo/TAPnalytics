@@ -7,7 +7,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getFeedbackSessionByToken, getSurveyCard } from "@/lib/data/survey";
 import { createCaseFromFeedback, generateCaseAiSuggestion } from "@/lib/cases";
 import { createAlertAndNotify } from "@/lib/alerts";
+import { pickRandomPositiveComment } from "@/lib/positive-comments";
 import type { ExperienceRating, UrgencyLevel } from "@/lib/supabase/types";
+
+const AUTO_POSITIVE_QUESTION_KEY = "auto_positive";
 
 async function resolveSession(code: string) {
   const cookieStore = await cookies();
@@ -43,6 +46,11 @@ export async function setRating(code: string, rating: ExperienceRating): Promise
 // Used when an "excellent" rating skips the feedback form entirely and
 // goes straight to the Google review link — there's no complaint to record,
 // but the session still needs to close out so it counts correctly in stats.
+// Since the customer never typed anything, we attach a stand-in positive
+// comment (picked at random per sector, see lib/positive-comments.ts) so
+// reports/exports have something in the comentario column instead of a
+// blank cell for every excellent tap — this function is only ever called
+// from that skip path, so "excellent" is a safe assumption here.
 export async function completeSession(code: string): Promise<boolean> {
   const resolved = await resolveSession(code);
   if (!resolved) return false;
@@ -58,6 +66,23 @@ export async function completeSession(code: string): Promise<boolean> {
       .from("tap_events")
       .update({ survey_completed: true })
       .eq("id", resolved.session.tap_event_id);
+  }
+
+  const { data: existing } = await admin
+    .from("feedback_responses")
+    .select("id")
+    .eq("feedback_session_id", resolved.session.id)
+    .limit(1);
+
+  if (!existing || existing.length === 0) {
+    await admin.from("feedback_responses").insert({
+      feedback_session_id: resolved.session.id,
+      question_key: AUTO_POSITIVE_QUESTION_KEY,
+      answer_text: pickRandomPositiveComment(resolved.card.sector),
+      urgency_level: null,
+      contact_requested: false,
+      consent_contact: false,
+    });
   }
 
   return true;
