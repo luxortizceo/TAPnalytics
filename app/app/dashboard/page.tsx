@@ -99,6 +99,15 @@ export default async function DashboardPage({
           }
           tone={health.recurrence.pct !== null && health.recurrence.pct > 0 ? "accent" : undefined}
         />
+        <Kpi
+          label="Clientes recuperados"
+          value={health.recovery.pct === null ? "—" : `${health.recovery.pct}%`}
+          subtext={
+            health.recovery.eligible > 0
+              ? `${health.recovery.recovered} de ${health.recovery.eligible} volvieron y calificaron bien`
+              : "Aún no hay suficientes casos con contacto para medirlo"
+          }
+        />
       </div>
       <p className="-mt-4 text-xs text-muted-foreground">
         &ldquo;Reseñas de Google generadas&rdquo; cuenta a las personas que calificaron su experiencia
@@ -106,7 +115,9 @@ export default async function DashboardPage({
         publicadas (Google no nos avisa cuando alguien la envía), pero es un antes/ahora real de
         lo que Tapnalytics está generando. &ldquo;Reincidencia&rdquo; cuenta, de los clientes que
         dejaron sus datos en un caso ya resuelto, cuántos volvieron a abrir otro caso después —
-        alto = la solución no está funcionando de verdad.
+        alto = la solución no está funcionando de verdad. &ldquo;Clientes recuperados&rdquo; es lo
+        opuesto: cuántos de esos mismos clientes volvieron después y esta vez calificaron bien —
+        la prueba real de que la solución sí sirvió.
       </p>
 
       <Card>

@@ -1,7 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
-import type { Database, UrgencyLevel } from "@/lib/supabase/types";
+import type { Database, ExperienceRating, UrgencyLevel } from "@/lib/supabase/types";
 
 /**
  * Operational health metrics for the dashboard — how well the team is
@@ -15,6 +15,7 @@ export interface HealthData {
   sla: { urgency: UrgencyLevel; resolved: number; onTime: number; pct: number | null }[];
   contactCapture: { withContact: number; total: number; pct: number | null };
   recurrence: { recurred: number; eligible: number; pct: number | null };
+  recovery: { recovered: number; eligible: number; pct: number | null };
 }
 
 export interface HealthFilters {
@@ -103,6 +104,50 @@ export async function getHealthData(filters: HealthFilters): Promise<HealthData>
     }
   }
 
+  // Recovered customers — of those same resolved-with-contact cases, how
+  // many of those contacts later submitted ANOTHER survey response (any
+  // card, any visit) with a good/excellent rating? feedback_responses
+  // stores contact info regardless of rating (see app/r/[code]/actions.ts
+  // and survey-flow.tsx — the opt-in now shows for "bad" and "good", not
+  // just "bad"), so a customer who left their info on a later good visit
+  // can be matched back to an earlier resolved complaint. This is the
+  // actual "did the fix work" signal, complementary to (not the same as)
+  // recurrence above — a customer can recur AND recover across different
+  // visits.
+  let recovered = 0;
+  if (resolvedWithContact.length > 0) {
+    const { data: laterResponses } = (await supabase
+      .from("feedback_responses")
+      .select("contact_email, contact_phone, feedback_sessions!inner(organization_id, rating, started_at)")
+      .or("contact_email.not.is.null,contact_phone.not.is.null")) as unknown as {
+      data:
+        | {
+            contact_email: string | null;
+            contact_phone: string | null;
+            feedback_sessions: {
+              organization_id: string;
+              rating: ExperienceRating | null;
+              started_at: string;
+            } | null;
+          }[]
+        | null;
+    };
+    const goodLaterResponses = (laterResponses ?? []).filter(
+      (r) =>
+        r.feedback_sessions?.organization_id === organizationId &&
+        (r.feedback_sessions.rating === "good" || r.feedback_sessions.rating === "excellent")
+    );
+    for (const original of resolvedWithContact) {
+      const wasRecovered = goodLaterResponses.some(
+        (r) =>
+          new Date(r.feedback_sessions!.started_at).getTime() > new Date(original.resolved_at!).getTime() &&
+          ((original.contact_email && r.contact_email === original.contact_email) ||
+            (original.contact_phone && r.contact_phone === original.contact_phone))
+      );
+      if (wasRecovered) recovered++;
+    }
+  }
+
   return {
     sla,
     contactCapture: {
@@ -114,6 +159,11 @@ export async function getHealthData(filters: HealthFilters): Promise<HealthData>
       recurred,
       eligible: resolvedWithContact.length,
       pct: resolvedWithContact.length > 0 ? Math.round((recurred / resolvedWithContact.length) * 100) : null,
+    },
+    recovery: {
+      recovered,
+      eligible: resolvedWithContact.length,
+      pct: resolvedWithContact.length > 0 ? Math.round((recovered / resolvedWithContact.length) * 100) : null,
     },
   };
 }

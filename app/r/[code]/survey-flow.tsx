@@ -288,7 +288,7 @@ function FeedbackForm({
         </div>
       )}
 
-      {rating === "bad" && (
+      {(rating === "bad" || rating === "good") && (
         <div className="flex flex-col gap-3 rounded-md border border-border bg-surface p-4">
           <div className="flex items-center gap-2.5">
             <Checkbox
@@ -298,7 +298,7 @@ function FeedbackForm({
               onCheckedChange={(v) => onWantsContactChange(v === true)}
             />
             <Label htmlFor="wantsContact" className="font-normal">
-              Quiero que el establecimiento me contacte
+              {rating === "bad" ? "Quiero que el establecimiento me contacte" : "Quiero dejar mis datos (opcional)"}
             </Label>
           </div>
           {wantsContact && (
@@ -310,7 +310,7 @@ function FeedbackForm({
                 <Checkbox id="consentContact" name="consentContact" required />
                 <Label htmlFor="consentContact" className="text-xs font-normal text-muted-foreground">
                   Acepto que el establecimiento use estos datos únicamente para dar seguimiento a mi
-                  comentario.
+                  visita.
                 </Label>
               </div>
             </div>

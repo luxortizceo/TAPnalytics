@@ -26,7 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CARD_STATUS_LABELS, CONTACT_POINT_TYPES } from "@/lib/labels";
-import type { LocationRow, NfcCardRow } from "@/lib/supabase/types";
+import type { LocationRow, NfcCardRow, TeamMemberRow } from "@/lib/supabase/types";
 import { createCard, updateCard, type CardActionState } from "./actions";
 
 const emptyState: CardActionState = {};
@@ -34,11 +34,13 @@ const emptyState: CardActionState = {};
 function CardForm({
   organizationId,
   locations,
+  teamMembers,
   card,
   onSuccess,
 }: {
   organizationId: string;
   locations: LocationRow[];
+  teamMembers: TeamMemberRow[];
   card?: NfcCardRow;
   onSuccess: () => void;
 }) {
@@ -81,6 +83,29 @@ function CardForm({
           <Label htmlFor="areaLabel">Mesa / habitación / área</Label>
           <Input id="areaLabel" name="areaLabel" placeholder="Mesa 12" defaultValue={card?.area_label ?? ""} />
         </div>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="teamMemberId">Asignar a (opcional)</Label>
+        <Select name="teamMemberId" defaultValue={card?.team_member_id ?? "unassigned"}>
+          <SelectTrigger id="teamMemberId">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="unassigned">Sin asignar</SelectItem>
+            {teamMembers.map((m) => (
+              <SelectItem key={m.id} value={m.id}>
+                {m.name}
+                {m.role_title ? ` (${m.role_title})` : ""}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {teamMembers.length === 0 && (
+          <p className="text-xs text-muted-foreground">
+            Agrega personas al equipo abajo para poder asignarles esta tarjeta.
+          </p>
+        )}
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -132,10 +157,12 @@ function CardForm({
 export function CardDialog({
   organizationId,
   locations,
+  teamMembers,
   card,
 }: {
   organizationId: string;
   locations: LocationRow[];
+  teamMembers: TeamMemberRow[];
   card?: NfcCardRow;
 }) {
   const [open, setOpen] = useState(false);
@@ -162,6 +189,7 @@ export function CardDialog({
         <CardForm
           organizationId={organizationId}
           locations={locations}
+          teamMembers={teamMembers}
           card={card}
           onSuccess={() => setOpen(false)}
         />

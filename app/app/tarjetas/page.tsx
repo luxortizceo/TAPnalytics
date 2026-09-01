@@ -4,8 +4,10 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrganization } from "@/lib/data/current-org";
 import { can } from "@/lib/permissions";
 import { CARD_STATUS_LABELS, CONTACT_POINT_TYPES } from "@/lib/labels";
-import type { CardStatus, LocationRow, NfcCardRow } from "@/lib/supabase/types";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { CardStatus, LocationRow, NfcCardRow, TeamMemberRow } from "@/lib/supabase/types";
 import { CardDialog, LinkDialog } from "./card-ui";
+import { TeamList } from "./team-ui";
 
 export const metadata = { title: "Tarjetas NFC" };
 
@@ -19,7 +21,7 @@ export default async function CardsPage() {
 
   const supabase = await createClient();
 
-  const [{ data: locations }, { data: cardsData }] = await Promise.all([
+  const [{ data: locations }, { data: cardsData }, { data: teamMembers }] = await Promise.all([
     supabase
       .from("locations")
       .select("*")
@@ -32,7 +34,13 @@ export default async function CardsPage() {
       .select("*, location:locations(name)")
       .eq("organization_id", current.organization.id)
       .order("created_at", { ascending: true }) as unknown as Promise<{ data: CardRow[] | null }>,
+    supabase
+      .from("team_members")
+      .select("*")
+      .eq("organization_id", current.organization.id)
+      .order("name", { ascending: true }) as unknown as Promise<{ data: TeamMemberRow[] | null }>,
   ]);
+  const teamMemberNameById = new Map((teamMembers ?? []).map((m) => [m.id, m.name]));
 
   const cards = cardsData ?? [];
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
@@ -60,11 +68,28 @@ export default async function CardsPage() {
         </div>
         {canManage &&
           (locations && locations.length > 0 ? (
-            <CardDialog organizationId={current.organization.id} locations={locations as LocationRow[]} />
+            <CardDialog
+              organizationId={current.organization.id}
+              locations={locations as LocationRow[]}
+              teamMembers={teamMembers ?? []}
+            />
           ) : (
             <p className="text-sm text-muted-foreground">Crea una sucursal primero.</p>
           ))}
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Personal</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <TeamList
+            organizationId={current.organization.id}
+            locations={(locations as LocationRow[]) ?? []}
+            members={teamMembers ?? []}
+          />
+        </CardContent>
+      </Card>
 
       {cards.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border p-12 text-center text-sm text-muted-foreground">
@@ -78,6 +103,7 @@ export default async function CardsPage() {
                 <th className="px-4 py-3 font-medium">Alias</th>
                 <th className="px-4 py-3 font-medium">Sucursal</th>
                 <th className="px-4 py-3 font-medium">Punto de contacto</th>
+                <th className="px-4 py-3 font-medium">Asignada a</th>
                 <th className="px-4 py-3 font-medium">Estado</th>
                 <th className="px-4 py-3 font-medium">Taps totales</th>
                 <th className="px-4 py-3" />
@@ -96,6 +122,9 @@ export default async function CardsPage() {
                   <td className="px-4 py-3 text-muted-foreground">
                     {contactPointLabel(card.contact_point_type)}
                   </td>
+                  <td className="px-4 py-3 text-muted-foreground">
+                    {card.team_member_id ? teamMemberNameById.get(card.team_member_id) ?? "—" : "—"}
+                  </td>
                   <td className="px-4 py-3">
                     <Badge variant={card.status === "active" ? "positive" : "outline"}>
                       {CARD_STATUS_LABELS[card.status as CardStatus]}
@@ -113,6 +142,7 @@ export default async function CardsPage() {
                         <CardDialog
                           organizationId={current.organization.id}
                           locations={(locations as LocationRow[]) ?? []}
+                          teamMembers={teamMembers ?? []}
                           card={card}
                         />
                       )}

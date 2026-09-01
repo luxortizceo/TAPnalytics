@@ -228,7 +228,7 @@ export type NfcCardRow = {
   alias: string | null;
   contact_point_type: ContactPointType;
   area_label: string | null;
-  employee_id: string | null;
+  team_member_id: string | null;
   status: CardStatus;
   activated_at: string | null;
   last_tap_at: string | null;
@@ -237,6 +237,19 @@ export type NfcCardRow = {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+}
+
+export type TeamMemberStatus = "active" | "inactive";
+
+export type TeamMemberRow = {
+  id: string;
+  organization_id: string;
+  location_id: string | null;
+  name: string;
+  role_title: string | null;
+  status: TeamMemberStatus;
+  created_at: string;
+  updated_at: string;
 }
 
 export type GoogleReviewSnapshotRow = {
@@ -662,6 +675,7 @@ export type Database = {
         Updatable<MemberLocationRow>
       >;
       nfc_cards: Table<NfcCardRow, Insertable<NfcCardRow>, Updatable<NfcCardRow>>;
+      team_members: Table<TeamMemberRow, Insertable<TeamMemberRow>, Updatable<TeamMemberRow>>;
       google_review_snapshots: Table<
         GoogleReviewSnapshotRow,
         Insertable<GoogleReviewSnapshotRow>,
