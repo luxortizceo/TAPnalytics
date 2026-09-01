@@ -123,18 +123,33 @@ const SIGNAL_STOPWORDS = new Set([
   "un", "una", "los", "las", "su", "sus", "es", "lo", "le", "ni", "u", "e", "para",
 ]);
 
-// Descompone las frases de "signals" (ej. "amenaza, agresión, arma o
-// violencia") en términos individuales para poder buscarlos como substring
-// dentro del comentario libre del cliente.
-function tokenizeSignals(signals: string[]): string[] {
-  const terms = new Set<string>();
-  for (const signal of signals) {
-    for (const piece of signal.toLowerCase().split(/[,/;]|\s+o\s+|\s+y\s+/)) {
-      const term = piece.trim();
-      if (term.length >= 4 && !SIGNAL_STOPWORDS.has(term)) terms.add(term);
-    }
+// Raíz corta (4 caracteres) en vez de la palabra completa, porque el
+// cliente casi nunca escribe la forma exacta del catálogo — ej.
+// "acosadoramente" no contiene "acoso" completo, pero sí la raíz "acos"
+// (mismo criterio que SAFETY_CONCERN_PATTERNS más arriba).
+function stemWord(word: string): string {
+  return word.length > 4 ? word.slice(0, 4) : word;
+}
+
+// Descompone un texto en el conjunto de raíces de sus palabras (≥4
+// caracteres, sin stopwords). Se usa tanto para las "signals" del catálogo
+// como para el comentario del cliente, y la coincidencia se hace
+// raíz-contra-raíz por palabra completa — nunca como substring del texto
+// crudo, porque eso cruza límites de palabra y genera falsos positivos
+// (ej. "podemos" contiene "demo", "acosadoramente" contiene "amen").
+function wordStems(text: string): Set<string> {
+  const stems = new Set<string>();
+  for (const word of text.toLowerCase().split(/[^\p{L}]+/u)) {
+    if (word.length < 4 || SIGNAL_STOPWORDS.has(word)) continue;
+    stems.add(stemWord(word));
   }
-  return [...terms];
+  return stems;
+}
+
+function signalStems(signals: string[]): Set<string> {
+  const stems = new Set<string>();
+  for (const signal of signals) for (const stem of wordStems(signal)) stems.add(stem);
+  return stems;
 }
 
 /**
@@ -150,19 +165,22 @@ async function findIncidentMatch(
   comments: string[]
 ): Promise<Omit<CaseAiSuggestion, "source"> | null> {
   if (comments.length === 0) return null;
-  const text = comments.join(" \n ").toLowerCase();
+  const commentStems = wordStems(comments.join(" \n "));
+  if (commentStems.size === 0) return null;
 
   const { data } = await client
     .from("incident_playbook")
     .select(
-      "problem, category_label, vertical, urgency_default, signals, immediate_action, owner_role, customer_response, root_cause_action, escalation, do_not"
-    );
+      "scenario_id, problem, category_label, vertical, urgency_default, signals, immediate_action, owner_role, customer_response, root_cause_action, escalation, do_not"
+    )
+    .order("scenario_id");
   if (!data || data.length === 0) return null;
 
   let best: (typeof data)[number] | null = null;
   let bestScore = 0;
   for (const row of data) {
-    const score = tokenizeSignals(row.signals).reduce((n, term) => n + (text.includes(term) ? 1 : 0), 0);
+    let score = 0;
+    for (const stem of signalStems(row.signals)) if (commentStems.has(stem)) score++;
     if (score === 0) continue;
     const better =
       score > bestScore ||
