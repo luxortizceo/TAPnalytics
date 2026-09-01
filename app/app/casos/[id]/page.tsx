@@ -171,10 +171,30 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
                     <p className="text-xs font-medium text-muted-foreground">Acción interna recomendada</p>
                     <p className="mt-1 text-sm text-foreground">{caseRow.ai_suggestion.internalAction}</p>
                   </div>
+                  {caseRow.ai_suggestion.escalation && (
+                    <div className="rounded-md border border-accent/40 bg-accent/5 p-3">
+                      <p className="text-xs font-medium text-accent">Cuándo y cómo escalar</p>
+                      <p className="mt-1 text-sm text-foreground">{caseRow.ai_suggestion.escalation}</p>
+                    </div>
+                  )}
+                  {caseRow.ai_suggestion.doNot && caseRow.ai_suggestion.doNot.length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground">
+                        Para desescalar — qué NO hacer
+                      </p>
+                      <ul className="mt-1 flex flex-col gap-1 text-sm text-foreground">
+                        {caseRow.ai_suggestion.doNot.map((item, i) => (
+                          <li key={i}>• {item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                   <p className="text-xs text-muted-foreground">
                     {caseRow.ai_suggestion.source === "ai"
                       ? "Generado por IA"
-                      : "De la base de soluciones pre-escritas"}
+                      : caseRow.ai_suggestion.source === "incident"
+                        ? "Del catálogo de incidentes por giro de negocio"
+                        : "De la base de soluciones pre-escritas"}
                     {caseRow.ai_suggestion_generated_at &&
                       ` el ${new Date(caseRow.ai_suggestion_generated_at).toLocaleString("es-MX")}`}
                     . Revísalo antes de usarlo — tú conoces al cliente mejor que esta sugerencia.

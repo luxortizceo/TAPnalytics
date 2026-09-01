@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CaseAiSuggestion, Database, ExperienceRating, UrgencyLevel } from "@/lib/supabase/types";
 import { suggestCaseResolution } from "@/lib/ai";
+import { URGENCY_LABELS } from "@/lib/labels";
 
 // Default response-time SLA by urgency, used to set cases.due_at when a
 // case is auto-created from a bad review. Configurable per-org SLAs are a
@@ -115,12 +116,81 @@ async function findPlaybookMatch(
   };
 }
 
+const URGENCY_SEVERITY: Record<UrgencyLevel, number> = { critical: 4, high: 3, medium: 2, low: 1 };
+
+const SIGNAL_STOPWORDS = new Set([
+  "de", "la", "el", "en", "con", "por", "sin", "al", "del", "y", "a", "que", "no", "o", "se",
+  "un", "una", "los", "las", "su", "sus", "es", "lo", "le", "ni", "u", "e", "para",
+]);
+
+// Descompone las frases de "signals" (ej. "amenaza, agresión, arma o
+// violencia") en términos individuales para poder buscarlos como substring
+// dentro del comentario libre del cliente.
+function tokenizeSignals(signals: string[]): string[] {
+  const terms = new Set<string>();
+  for (const signal of signals) {
+    for (const piece of signal.toLowerCase().split(/[,/;]|\s+o\s+|\s+y\s+/)) {
+      const term = piece.trim();
+      if (term.length >= 4 && !SIGNAL_STOPWORDS.has(term)) terms.add(term);
+    }
+  }
+  return [...terms];
+}
+
+/**
+ * Busca en el catálogo de 185 escenarios de incidentes por giro de negocio
+ * (public.incident_playbook) el que mejor coincida con el texto libre del
+ * caso, comparando las "signals" de cada escenario contra los comentarios.
+ * Es más específico que solution_playbook (categorías genéricas) y se
+ * intenta primero: cubre desde "comida fría" hasta acoso o emergencias
+ * médicas, con su propia guía de escalamiento y qué NO hacer.
+ */
+async function findIncidentMatch(
+  client: SupabaseClient<Database>,
+  comments: string[]
+): Promise<Omit<CaseAiSuggestion, "source"> | null> {
+  if (comments.length === 0) return null;
+  const text = comments.join(" \n ").toLowerCase();
+
+  const { data } = await client
+    .from("incident_playbook")
+    .select(
+      "problem, category_label, vertical, urgency_default, signals, immediate_action, owner_role, customer_response, root_cause_action, escalation, do_not"
+    );
+  if (!data || data.length === 0) return null;
+
+  let best: (typeof data)[number] | null = null;
+  let bestScore = 0;
+  for (const row of data) {
+    const score = tokenizeSignals(row.signals).reduce((n, term) => n + (text.includes(term) ? 1 : 0), 0);
+    if (score === 0) continue;
+    const better =
+      score > bestScore ||
+      (score === bestScore && !!best && URGENCY_SEVERITY[row.urgency_default] > URGENCY_SEVERITY[best.urgency_default]);
+    if (better) {
+      best = row;
+      bestScore = score;
+    }
+  }
+  if (!best) return null;
+
+  return {
+    diagnosis: `${best.problem} — caso de "${best.category_label}" con urgencia ${URGENCY_LABELS[best.urgency_default]} según el catálogo de incidentes por giro de negocio (${best.vertical}).`,
+    customerResponse: best.customer_response,
+    internalAction: `Acción inmediata (responsable: ${best.owner_role}): ${best.immediate_action} Acción de fondo: ${best.root_cause_action}`,
+    escalation: best.escalation ?? undefined,
+    doNot: best.do_not.length > 0 ? best.do_not : undefined,
+  };
+}
+
 /**
  * Genera (o regenera) la sugerencia de un caso: diagnóstico, mensaje para el
- * cliente y acción interna. Primero busca en la base de soluciones
- * pre-escritas (gratis, instantánea); solo si ninguna categoría del caso
- * tiene entrada ahí, intenta la IA como refuerzo (best-effort — si no está
- * configurada o falla, no toca la fila).
+ * cliente y acción interna. Primero busca en el catálogo de incidentes por
+ * giro de negocio (el más específico), luego en la base de soluciones
+ * pre-escritas por categoría, y solo si ninguna de las dos tiene
+ * coincidencia intenta la IA como refuerzo (best-effort — si no está
+ * configurada o falla, no toca la fila). Todo antes de la IA es gratis e
+ * instantáneo.
  */
 export async function generateCaseAiSuggestion(
   client: SupabaseClient<Database>,
@@ -175,15 +245,18 @@ export async function generateCaseAiSuggestion(
     categoryCodes.unshift("harassment");
   }
 
-  const playbookMatch = await findPlaybookMatch(client, categoryCodes);
-  const suggestion: CaseAiSuggestion | null = playbookMatch
-    ? { ...playbookMatch, source: "playbook" }
-    : await suggestCaseResolution({
-        comments,
-        categories: categoryLabels,
-        urgency: caseRow.urgency,
-        rating: caseRow.rating ?? "bad",
-      }).then((ai) => (ai ? { ...ai, source: "ai" as const } : null));
+  const incidentMatch = await findIncidentMatch(client, comments);
+  const playbookMatch = incidentMatch ? null : await findPlaybookMatch(client, categoryCodes);
+  const suggestion: CaseAiSuggestion | null = incidentMatch
+    ? { ...incidentMatch, source: "incident" }
+    : playbookMatch
+      ? { ...playbookMatch, source: "playbook" }
+      : await suggestCaseResolution({
+          comments,
+          categories: categoryLabels,
+          urgency: caseRow.urgency,
+          rating: caseRow.rating ?? "bad",
+        }).then((ai) => (ai ? { ...ai, source: "ai" as const } : null));
   if (!suggestion) return null;
 
   const firstName = caseRow.contact_name?.trim().split(/\s+/)[0];

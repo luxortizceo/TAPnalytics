@@ -375,7 +375,9 @@ export type CaseAiSuggestion = {
   diagnosis: string;
   customerResponse: string;
   internalAction: string;
-  source: "playbook" | "ai";
+  source: "incident" | "playbook" | "ai";
+  escalation?: string;
+  doNot?: string[];
 };
 
 export type SolutionPlaybookRow = {
@@ -384,6 +386,31 @@ export type SolutionPlaybookRow = {
   diagnosis: string;
   customer_response: string;
   internal_action: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type IncidentPlaybookRow = {
+  id: string;
+  scenario_id: string;
+  vertical: string;
+  category_label: string;
+  problem: string;
+  urgency_default: UrgencyLevel;
+  signals: string[];
+  questions_to_confirm: string[];
+  immediate_action: string;
+  owner_role: string;
+  customer_response: string;
+  root_cause_action: string;
+  ack_sla: string | null;
+  action_sla: string | null;
+  resolution_target: string | null;
+  escalation: string | null;
+  do_not: string[];
+  evidence: string[];
+  success_metrics: string[];
+  confidence_rule: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -644,6 +671,11 @@ export type Database = {
         SolutionPlaybookRow,
         Insertable<SolutionPlaybookRow>,
         Updatable<SolutionPlaybookRow>
+      >;
+      incident_playbook: Table<
+        IncidentPlaybookRow,
+        Insertable<IncidentPlaybookRow>,
+        Updatable<IncidentPlaybookRow>
       >;
       nfc_card_history: Table<
         NfcCardHistoryRow,
