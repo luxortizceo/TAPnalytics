@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentOrganization } from "@/lib/data/current-org";
 import { distanceMeters } from "@/lib/geo";
 import { zodFieldErrors } from "@/lib/validations/zod-helpers";
+import { createAlertAndNotify } from "@/lib/alerts";
 
 export type AttendanceActionState = {
   error?: string;
@@ -15,22 +16,26 @@ export type AttendanceActionState = {
 };
 
 // Cuánto margen (en minutos) después de la hora esperada se sigue
-// contando como "a tiempo" antes de marcarse "late".
-const LATE_GRACE_MINUTES = 10;
+// contando como "a tiempo" antes de marcarse "late" y disparar la alerta
+// employee_late.
+const LATE_GRACE_MINUTES = 5;
 
 async function findOwnTeamMember(organizationId: string, userId: string) {
   const supabase = await createClient();
   const { data } = await supabase
     .from("team_members")
-    .select("id, location_id, shift_start_time, status")
+    .select("id, name, location_id, shift_start_time, status")
     .eq("organization_id", organizationId)
     .eq("user_id", userId)
     .maybeSingle();
   return data;
 }
 
-function computeStatus(shiftStartTime: string | null, timezone: string): "on_time" | "late" {
-  if (!shiftStartTime) return "on_time";
+function computeStatus(
+  shiftStartTime: string | null,
+  timezone: string
+): { status: "on_time" | "late"; minutesLate: number } {
+  if (!shiftStartTime) return { status: "on_time", minutesLate: 0 };
   const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone: timezone,
     hour: "2-digit",
@@ -43,8 +48,9 @@ function computeStatus(shiftStartTime: string | null, timezone: string): "on_tim
 
   const [sh, sm] = shiftStartTime.split(":").map(Number);
   const shiftMinutes = sh * 60 + sm;
+  const minutesLate = Math.max(0, nowMinutes - shiftMinutes);
 
-  return nowMinutes <= shiftMinutes + LATE_GRACE_MINUTES ? "on_time" : "late";
+  return { status: minutesLate <= LATE_GRACE_MINUTES ? "on_time" : "late", minutesLate };
 }
 
 const coordsSchema = z.object({
@@ -81,7 +87,7 @@ export async function checkIn(
 
   const { data: location } = await supabase
     .from("locations")
-    .select("latitude, longitude, checkin_radius_meters, timezone")
+    .select("name, latitude, longitude, checkin_radius_meters, timezone")
     .eq("id", teamMember.location_id)
     .single();
 
@@ -106,7 +112,7 @@ export async function checkIn(
     };
   }
 
-  const status = computeStatus(teamMember.shift_start_time, location.timezone);
+  const { status, minutesLate } = computeStatus(teamMember.shift_start_time, location.timezone);
 
   const { error } = await supabase.from("attendance_records").insert({
     organization_id: current.organization.id,
@@ -118,6 +124,18 @@ export async function checkIn(
     status,
   });
   if (error) return { error: "No pudimos registrar tu entrada." };
+
+  if (status === "late") {
+    const admin = createAdminClient();
+    await createAlertAndNotify(admin, {
+      organizationId: current.organization.id,
+      locationId: teamMember.location_id,
+      type: "employee_late",
+      severity: "warning",
+      title: `${teamMember.name} llegó tarde a ${location.name}`,
+      message: `Se esperaba a las ${teamMember.shift_start_time?.slice(0, 5)} — marcó entrada ${minutesLate} min tarde.`,
+    });
+  }
 
   revalidatePath("/app/asistencia");
   return { success: status === "late" ? "Entrada registrada (llegaste tarde)." : "Entrada registrada a tiempo." };

@@ -62,6 +62,7 @@ export type AlertType =
   | "card_abnormal_activity"
   | "unresolved_case"
   | "weekly_report_ready"
+  | "employee_late"
   | "custom";
 export type NotificationChannel = "in_app" | "email" | "push" | "whatsapp";
 

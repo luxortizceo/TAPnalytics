@@ -21,6 +21,11 @@ const WIRED_ALERT_TYPES: { type: AlertType; name: string; description: string }[
     name: "Comentario urgente",
     description: "Se dispara cuando un cliente marca su comentario con urgencia alta o crítica.",
   },
+  {
+    type: "employee_late",
+    name: "Empleado llegó tarde",
+    description: "Se dispara cuando alguien marca su entrada más de 5 minutos después de su horario esperado.",
+  },
 ];
 
 export default async function AlertsPage({
