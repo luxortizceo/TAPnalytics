@@ -9,6 +9,7 @@ import {
   FileBarChart,
   Sparkles,
   Wallet,
+  Clock,
 } from "lucide-react";
 import type { Action } from "@/lib/permissions";
 
@@ -22,6 +23,7 @@ export const NAV: {
   { href: "/app/sucursales", label: "Sucursales", icon: Building2 },
   { href: "/app/tarjetas", label: "Tarjetas NFC", icon: CreditCard },
   { href: "/app/casos", label: "Casos", icon: FileWarning },
+  { href: "/app/asistencia", label: "Asistencia", icon: Clock },
   { href: "/app/alertas", label: "Alertas", icon: Bell },
   { href: "/app/reportes", label: "Reportes", icon: FileBarChart },
   { href: "/app/inteligencia", label: "TAP Intelligence", icon: Sparkles },

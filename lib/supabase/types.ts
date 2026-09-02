@@ -208,6 +208,9 @@ export type LocationRow = {
   google_place_id: string | null;
   opening_hours: Record<string, unknown>;
   settings: Record<string, unknown>;
+  latitude: number | null;
+  longitude: number | null;
+  checkin_radius_meters: number;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -248,8 +251,26 @@ export type TeamMemberRow = {
   name: string;
   role_title: string | null;
   status: TeamMemberStatus;
+  user_id: string | null;
+  shift_start_time: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export type AttendanceStatus = "on_time" | "late";
+
+export type AttendanceRecordRow = {
+  id: string;
+  organization_id: string;
+  location_id: string;
+  team_member_id: string;
+  checked_in_at: string;
+  checked_out_at: string | null;
+  checkin_lat: number;
+  checkin_lng: number;
+  checkin_distance_meters: number;
+  status: AttendanceStatus;
+  created_at: string;
 }
 
 export type GoogleReviewSnapshotRow = {
@@ -681,6 +702,11 @@ export type Database = {
       >;
       nfc_cards: Table<NfcCardRow, Insertable<NfcCardRow>, Updatable<NfcCardRow>>;
       team_members: Table<TeamMemberRow, Insertable<TeamMemberRow>, Updatable<TeamMemberRow>>;
+      attendance_records: Table<
+        AttendanceRecordRow,
+        Insertable<AttendanceRecordRow>,
+        Updatable<AttendanceRecordRow>
+      >;
       google_review_snapshots: Table<
         GoogleReviewSnapshotRow,
         Insertable<GoogleReviewSnapshotRow>,

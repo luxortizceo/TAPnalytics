@@ -6,7 +6,7 @@
  */
 
 import { useState, useActionState, useEffect } from "react";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, MapPin } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -36,6 +36,31 @@ function LocationForm({
 }) {
   const action = location ? updateLocation : createLocation;
   const [state, formAction, pending] = useActionState(action, emptyState);
+  const [lat, setLat] = useState(location?.latitude != null ? String(location.latitude) : "");
+  const [lng, setLng] = useState(location?.longitude != null ? String(location.longitude) : "");
+  const [geoError, setGeoError] = useState<string | null>(null);
+  const [locating, setLocating] = useState(false);
+
+  function captureLocation() {
+    setGeoError(null);
+    if (!navigator.geolocation) {
+      setGeoError("Tu navegador no soporta geolocalización.");
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLat(String(position.coords.latitude));
+        setLng(String(position.coords.longitude));
+        setLocating(false);
+      },
+      () => {
+        setGeoError("No pudimos obtener tu ubicación automáticamente. Puedes escribir las coordenadas manualmente abajo.");
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }
 
   useEffect(() => {
     if (state.success) onSuccess();
@@ -81,6 +106,60 @@ function LocationForm({
             name="googleReviewsUrl"
             defaultValue={location?.google_reviews_url ?? ""}
             invalid={!!state.fieldErrors?.googleReviewsUrl}
+          />
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3 rounded-md border border-border bg-surface-2 p-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-sm font-medium text-foreground">Ubicación GPS</span>
+            <span className="text-xs text-muted-foreground">
+              Necesaria para validar el check-in de asistencia del personal.
+            </span>
+          </div>
+          <Button type="button" variant="secondary" size="sm" onClick={captureLocation} disabled={locating}>
+            <MapPin className="size-4" />
+            {locating ? "Ubicando…" : "Usar mi ubicación actual"}
+          </Button>
+        </div>
+        {geoError && <p className="text-xs text-accent">{geoError}</p>}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="latitude">Latitud</Label>
+            <Input
+              id="latitude"
+              name="latitude"
+              type="text"
+              inputMode="decimal"
+              placeholder="19.43260"
+              value={lat}
+              onChange={(e) => setLat(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="longitude">Longitud</Label>
+            <Input
+              id="longitude"
+              name="longitude"
+              type="text"
+              inputMode="decimal"
+              placeholder="-99.13320"
+              value={lng}
+              onChange={(e) => setLng(e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="checkinRadiusMeters">Radio permitido para check-in (metros)</Label>
+          <Input
+            id="checkinRadiusMeters"
+            name="checkinRadiusMeters"
+            type="number"
+            min={20}
+            max={2000}
+            defaultValue={location?.checkin_radius_meters ?? 150}
+            className="max-w-[140px]"
           />
         </div>
       </div>

@@ -34,6 +34,12 @@ export const createLocationSchema = z.object({
     .url("Ingresa una URL válida")
     .optional()
     .or(z.literal("")),
+  // z.literal("") must come first: z.coerce.number() on an empty string
+  // coerces to 0 (Number("") === 0) instead of failing, so checking the
+  // literal second would never let an intentionally-blank field through.
+  latitude: z.union([z.literal(""), z.coerce.number().min(-90, "Latitud inválida").max(90, "Latitud inválida")]),
+  longitude: z.union([z.literal(""), z.coerce.number().min(-180, "Longitud inválida").max(180, "Longitud inválida")]),
+  checkinRadiusMeters: z.coerce.number().int().min(20).max(2000).default(150),
 });
 
 export type CreateLocationInput = z.infer<typeof createLocationSchema>;

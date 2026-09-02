@@ -32,6 +32,9 @@ export async function createLocation(
     timezone: formData.get("timezone") || "America/Mexico_City",
     currency: formData.get("currency") || "MXN",
     googleReviewsUrl: formData.get("googleReviewsUrl") ?? "",
+    latitude: formData.get("latitude") || "",
+    longitude: formData.get("longitude") || "",
+    checkinRadiusMeters: formData.get("checkinRadiusMeters") || 150,
   });
   if (!parsed.success) return { fieldErrors: fieldErrorsOf(parsed.error) };
 
@@ -49,6 +52,9 @@ export async function createLocation(
     timezone: parsed.data.timezone,
     currency: parsed.data.currency,
     google_reviews_url: parsed.data.googleReviewsUrl || null,
+    latitude: parsed.data.latitude === "" ? null : parsed.data.latitude,
+    longitude: parsed.data.longitude === "" ? null : parsed.data.longitude,
+    checkin_radius_meters: parsed.data.checkinRadiusMeters,
   });
 
   if (error) return { error: "No pudimos crear la sucursal. Verifica tus permisos." };
@@ -74,6 +80,9 @@ export async function updateLocation(
     timezone: formData.get("timezone") || "America/Mexico_City",
     currency: formData.get("currency") || "MXN",
     googleReviewsUrl: formData.get("googleReviewsUrl") ?? "",
+    latitude: formData.get("latitude") || "",
+    longitude: formData.get("longitude") || "",
+    checkinRadiusMeters: formData.get("checkinRadiusMeters") || 150,
   });
   if (!parsed.success) return { fieldErrors: fieldErrorsOf(parsed.error) };
 
@@ -91,6 +100,9 @@ export async function updateLocation(
       timezone: parsed.data.timezone,
       currency: parsed.data.currency,
       google_reviews_url: parsed.data.googleReviewsUrl || null,
+      latitude: parsed.data.latitude === "" ? null : parsed.data.latitude,
+      longitude: parsed.data.longitude === "" ? null : parsed.data.longitude,
+      checkin_radius_meters: parsed.data.checkinRadiusMeters,
       ...(status === "active" || status === "inactive" ? { status } : {}),
     })
     .eq("id", locationId);
