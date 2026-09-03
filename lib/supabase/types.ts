@@ -271,6 +271,7 @@ export type AttendanceRecordRow = {
   checkin_lng: number;
   checkin_distance_meters: number;
   status: AttendanceStatus;
+  minutes_late: number;
   created_at: string;
 }
 

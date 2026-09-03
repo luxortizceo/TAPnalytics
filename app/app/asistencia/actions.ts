@@ -122,6 +122,7 @@ export async function checkIn(
     checkin_lng: parsed.data.lng,
     checkin_distance_meters: distance,
     status,
+    minutes_late: minutesLate,
   });
   if (error) return { error: "No pudimos registrar tu entrada." };
 

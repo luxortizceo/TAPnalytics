@@ -1,4 +1,7 @@
+import Link from "next/link";
+import { BarChart3 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { Button } from "@/components/ui/button";
 import { getCurrentOrganization } from "@/lib/data/current-org";
 import { can } from "@/lib/permissions";
 import type { LocationRow, TeamMemberRow } from "@/lib/supabase/types";
@@ -111,7 +114,15 @@ export default async function AsistenciaPage() {
           </div>
 
           <div>
-            <h2 className="text-lg font-semibold tracking-tight">Registros recientes</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold tracking-tight">Registros recientes</h2>
+              <Button asChild variant="secondary" size="sm">
+                <Link href="/app/asistencia/reportes">
+                  <BarChart3 className="size-4" />
+                  Reportes de puntualidad
+                </Link>
+              </Button>
+            </div>
             <div className="mt-4">
               <AttendanceReport rows={reportRows} />
             </div>
