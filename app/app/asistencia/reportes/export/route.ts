@@ -2,6 +2,7 @@ import ExcelJS from "exceljs";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrganization } from "@/lib/data/current-org";
+import { addBrandHeader, brandFill } from "@/lib/reports/branding";
 import { can } from "@/lib/permissions";
 
 function csvEscape(value: unknown): string {
@@ -61,9 +62,17 @@ export async function GET(request: NextRequest) {
   if (format === "xlsx") {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Puntualidad");
-    sheet.addRow(header);
-    sheet.getRow(1).font = { bold: true };
-    for (const row of rows) sheet.addRow(row);
+    const headerRowIndex = await addBrandHeader(workbook, sheet, current.organization, "Reporte de puntualidad");
+
+    const headerRow = sheet.getRow(headerRowIndex);
+    headerRow.values = header;
+    headerRow.font = { bold: true };
+    const fill = brandFill(current.organization.brand_color);
+    if (fill) headerRow.fill = fill;
+
+    rows.forEach((row, i) => {
+      sheet.getRow(headerRowIndex + 1 + i).values = row;
+    });
     sheet.columns.forEach((col) => {
       col.width = 18;
     });

@@ -17,6 +17,12 @@ const settingsSchema = z.object({
   name: z.string().trim().min(2, "Ingresa el nombre de la empresa"),
   sector: z.enum(SECTORS.map((s) => s.value) as [string, ...string[]]),
   logoUrl: z.string().trim().url("Ingresa una URL válida").optional().or(z.literal("")),
+  brandColor: z
+    .string()
+    .trim()
+    .regex(/^#[0-9a-fA-F]{6}$/, "Usa un color hexadecimal, ej. #1f6feb")
+    .optional()
+    .or(z.literal("")),
   googleReviewsUrl: z.string().trim().url("Ingresa una URL válida").optional().or(z.literal("")),
   timezone: z.string().trim().min(1),
   currency: z.string().trim().min(1),
@@ -34,6 +40,7 @@ export async function updateOrganizationSettings(
     name: formData.get("name"),
     sector: formData.get("sector"),
     logoUrl: formData.get("logoUrl") ?? "",
+    brandColor: formData.get("brandColor") ?? "",
     googleReviewsUrl: formData.get("googleReviewsUrl") ?? "",
     timezone: formData.get("timezone"),
     currency: formData.get("currency"),
@@ -50,6 +57,7 @@ export async function updateOrganizationSettings(
       name: parsed.data.name,
       sector: parsed.data.sector as Sector,
       logo_url: parsed.data.logoUrl || null,
+      brand_color: parsed.data.brandColor || null,
       google_reviews_url: parsed.data.googleReviewsUrl || null,
       timezone: parsed.data.timezone,
       currency: parsed.data.currency,

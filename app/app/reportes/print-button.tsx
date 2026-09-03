@@ -16,10 +16,16 @@ export function PrintButton() {
 // straight to a route that renders the report in a headless browser and
 // returns an actual .pdf, so the browser's native download handling takes
 // over (no JS, no blob juggling — Content-Disposition does the rest).
-export function SavePdfButton({ exportParams }: { exportParams: string }) {
+export function SavePdfButton({
+  exportParams,
+  basePath = "/app/reportes/export/pdf",
+}: {
+  exportParams: string;
+  basePath?: string;
+}) {
   return (
     <Button asChild variant="secondary">
-      <a href={`/app/reportes/export/pdf?${exportParams}`}>
+      <a href={`${basePath}?${exportParams}`}>
         <FileDown className="size-4" />
         Guardar como PDF
       </a>

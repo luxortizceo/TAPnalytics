@@ -149,6 +149,7 @@ export type OrganizationRow = {
   slug: string;
   sector: Sector;
   logo_url: string | null;
+  brand_color: string | null;
   status: OrgStatus;
   plan_id: string | null;
   currency: string;

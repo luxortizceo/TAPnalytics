@@ -53,6 +53,32 @@ export function SettingsForm({
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="logoUrl">URL del logotipo</Label>
             <Input id="logoUrl" name="logoUrl" defaultValue={organization.logo_url ?? ""} />
+            <p className="text-xs text-muted-foreground">
+              Aparece en tus reportes descargables (PDF y Excel) en vez de la marca de TAPnalytics.
+            </p>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="brandColor">Color de marca</Label>
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                id="brandColorPicker"
+                value={/^#[0-9a-fA-F]{6}$/.test(organization.brand_color ?? "") ? organization.brand_color! : "#c9184a"}
+                onChange={(e) => {
+                  const input = document.getElementById("brandColor") as HTMLInputElement | null;
+                  if (input) input.value = e.target.value;
+                }}
+                className="h-11 w-11 cursor-pointer rounded-md border border-border bg-transparent p-1"
+              />
+              <Input
+                id="brandColor"
+                name="brandColor"
+                defaultValue={organization.brand_color ?? ""}
+                placeholder="#1f6feb"
+                invalid={!!state.fieldErrors?.brandColor}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">Se usa como acento en esos mismos reportes.</p>
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="googleReviewsUrl">URL de Google Reviews</Label>

@@ -76,20 +76,31 @@ export default async function ReportsPage({
       </div>
 
       <div className="rounded-lg border border-border bg-surface p-8 print:border-none print:p-0">
-        <header className="mb-8 flex items-start justify-between border-b border-border pb-6">
-          <div>
-            <h2 className="text-xl font-semibold">{current.organization.name}</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Reporte ejecutivo · {PERIOD_LABELS[key]}
-              {locationId && locations ? ` · ${locations.find((l) => l.id === locationId)?.name}` : ""}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {start.toLocaleDateString("es-MX")} – {end.toLocaleDateString("es-MX")}
-            </p>
+        <header
+          className="mb-8 flex items-start justify-between border-b pb-6"
+          style={{ borderColor: current.organization.brand_color ?? undefined }}
+        >
+          <div className="flex items-center gap-3">
+            {current.organization.logo_url && (
+              // eslint-disable-next-line @next/next/no-img-element -- logo del cliente, URL arbitraria fuera de next/image
+              <img
+                src={current.organization.logo_url}
+                alt={current.organization.name}
+                className="h-10 w-auto max-w-40 object-contain"
+              />
+            )}
+            <div>
+              <h2 className="text-xl font-semibold">{current.organization.name}</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Reporte ejecutivo · {PERIOD_LABELS[key]}
+                {locationId && locations ? ` · ${locations.find((l) => l.id === locationId)?.name}` : ""}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {start.toLocaleDateString("es-MX")} – {end.toLocaleDateString("es-MX")}
+              </p>
+            </div>
           </div>
-          <span className="text-lg font-semibold tracking-tight">
-            TAP<span className="text-accent">nalytics</span>
-          </span>
+          <span className="text-xs text-muted-foreground">Generado con TAPnalytics</span>
         </header>
 
         <section className="mb-8">
