@@ -76,7 +76,10 @@ export default async function ReportsPage({
       </div>
 
       <div className="rounded-lg border border-border bg-surface p-8 print:border-none print:p-0">
-        <header
+        {/* div, no <header> — el CSS de impresión global oculta todo <header>
+            para quitar la barra de navegación de la app, y nos llevaría de
+            paso este bloque de marca si usáramos la misma etiqueta */}
+        <div
           className="mb-8 flex items-start justify-between border-b pb-6"
           style={{ borderColor: current.organization.brand_color ?? undefined }}
         >
@@ -101,7 +104,7 @@ export default async function ReportsPage({
             </div>
           </div>
           <span className="text-xs text-muted-foreground">Generado con TAPnalytics</span>
-        </header>
+        </div>
 
         <section className="mb-8">
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">

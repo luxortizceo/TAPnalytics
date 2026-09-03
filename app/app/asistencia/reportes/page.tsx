@@ -71,7 +71,10 @@ export default async function PunctualityReportsPage({
       </div>
 
       <div className="rounded-lg border border-border bg-surface p-8 print:border-none print:p-0">
-        <header
+        {/* div, no <header> — el CSS de impresión global oculta todo <header>
+            para quitar la barra de navegación de la app, y nos llevaría de
+            paso este bloque de marca si usáramos la misma etiqueta */}
+        <div
           className="mb-8 flex items-start justify-between border-b pb-6"
           style={{ borderColor: current.organization.brand_color ?? undefined }}
         >
@@ -96,7 +99,7 @@ export default async function PunctualityReportsPage({
             </div>
           </div>
           <span className="text-xs text-muted-foreground">Generado con TAPnalytics</span>
-        </header>
+        </div>
 
         <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
           <StatCard label="Check-ins totales" value={data.totalCheckins} />
