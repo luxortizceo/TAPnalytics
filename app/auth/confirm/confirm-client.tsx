@@ -41,7 +41,7 @@ export function ConfirmClient({ fallback }: { fallback: string }) {
       // Drop the tokens from the URL now that the session is established —
       // they're single-use, but no reason to leave them sitting in history.
       window.history.replaceState(null, "", window.location.pathname);
-      const dest = await resolvePostAuthRedirect(fallback, type === "invite");
+      const dest = await resolvePostAuthRedirect(fallback, type === "invite" || type === "recovery");
       router.replace(dest);
     }
 

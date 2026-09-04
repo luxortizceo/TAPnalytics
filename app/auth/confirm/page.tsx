@@ -32,7 +32,7 @@ export default async function ConfirmPage({
     const supabase = await createClient();
     const { error } = await supabase.auth.verifyOtp({ type: type as EmailOtpType, token_hash });
     if (!error) {
-      redirect(await resolvePostAuthRedirect(fallback, type === "invite"));
+      redirect(await resolvePostAuthRedirect(fallback, type === "invite" || type === "recovery"));
     }
     redirect("/login?error=confirm_link_invalid");
   }

@@ -28,13 +28,17 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *
  * That "no password yet" fact is true of ANY invite-type link, not just
  * team invites — e.g. a superadmin created directly from the Supabase
- * dashboard's "Send invitation" button has no pending organization_members
- * row at all, so the check above alone missed it and silently dropped them
- * on /onboarding with no way to ever set a password. isInvite (the `type`
- * query/hash param from the email link, passed by the two callers below)
- * covers that case regardless of which flow created the invite.
+ * dashboard's "Send invitation" (type=invite) or "Send password recovery"
+ * (type=recovery) buttons has no pending organization_members row at all
+ * and no `next=/restablecer` in its redirect (that param only gets added
+ * by this app's own requestPasswordReset action) — so the check above
+ * alone missed it and silently dropped them on /onboarding with no way to
+ * ever set a password. needsPassword (derived from the email link's `type`
+ * by the two callers below) covers that case regardless of which flow
+ * created the link: both "invite" and "recovery" always mean the person
+ * still needs to land on the set-a-password screen.
  */
-export async function resolvePostAuthRedirect(fallback: string, isInvite = false): Promise<string> {
+export async function resolvePostAuthRedirect(fallback: string, needsPassword = false): Promise<string> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -49,6 +53,6 @@ export async function resolvePostAuthRedirect(fallback: string, isInvite = false
     .eq("status", "invited")
     .select("id");
 
-  if (isInvite || (activatedRows && activatedRows.length > 0)) return "/restablecer";
+  if (needsPassword || (activatedRows && activatedRows.length > 0)) return "/restablecer";
   return fallback;
 }
