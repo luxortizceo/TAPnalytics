@@ -25,8 +25,16 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * to /onboarding afterwards, which sees the just-activated membership and
  * sends them straight to their dashboard instead of the "create a
  * company" wizard.
+ *
+ * That "no password yet" fact is true of ANY invite-type link, not just
+ * team invites — e.g. a superadmin created directly from the Supabase
+ * dashboard's "Send invitation" button has no pending organization_members
+ * row at all, so the check above alone missed it and silently dropped them
+ * on /onboarding with no way to ever set a password. isInvite (the `type`
+ * query/hash param from the email link, passed by the two callers below)
+ * covers that case regardless of which flow created the invite.
  */
-export async function resolvePostAuthRedirect(fallback: string): Promise<string> {
+export async function resolvePostAuthRedirect(fallback: string, isInvite = false): Promise<string> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -41,6 +49,6 @@ export async function resolvePostAuthRedirect(fallback: string): Promise<string>
     .eq("status", "invited")
     .select("id");
 
-  if (activatedRows && activatedRows.length > 0) return "/restablecer";
+  if (isInvite || (activatedRows && activatedRows.length > 0)) return "/restablecer";
   return fallback;
 }

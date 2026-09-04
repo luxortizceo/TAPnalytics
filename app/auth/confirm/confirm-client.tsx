@@ -21,6 +21,7 @@ export function ConfirmClient({ fallback }: { fallback: string }) {
       const hash = new URLSearchParams(window.location.hash.slice(1));
       const access_token = hash.get("access_token");
       const refresh_token = hash.get("refresh_token");
+      const type = hash.get("type");
 
       if (!access_token || !refresh_token) {
         setInvalid(true);
@@ -40,7 +41,7 @@ export function ConfirmClient({ fallback }: { fallback: string }) {
       // Drop the tokens from the URL now that the session is established —
       // they're single-use, but no reason to leave them sitting in history.
       window.history.replaceState(null, "", window.location.pathname);
-      const dest = await resolvePostAuthRedirect(fallback);
+      const dest = await resolvePostAuthRedirect(fallback, type === "invite");
       router.replace(dest);
     }
 
